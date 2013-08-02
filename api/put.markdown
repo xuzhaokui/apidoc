@@ -1,7 +1,184 @@
 ---
 layout: default
-title: "上传接口"
+title: "上传方式"
 ---
+
+- [上传API](#upload-api)
+    - [Html Form Post](#html-form-post)
+    - [Multipart](#multipart)
+- [参数介绍](#parameters)
+	- [UploadToken](#uploadtoken)
+- [七牛的响应](#response)
+	- [普通上传](#ordinary-upload)
+	- [高级上传（带回调）](#advanced-upload)
+
+<a name="upload-api"></a>
+## 上传API
+
+资源上传可以通过 `http` 发送 `POST` 请求到七牛的上传url: `http://up.qbox.me/`
+
+<a name="html-form-post"></a>
+### HTML Form API
+
+当在网页上上传时可用这样的 `HTML Form` 来表达
+
+```
+<form method="post" action="http://up.qbox.me/" enctype="multipart/form-data">
+  <input name="key" type="hidden" value="{FileID}">
+  <input name="x:custom_field_name" type="hidden" value="{SomeVal}">
+  <input name="token" type="hidden" value="{UploadToken}">
+  <input name="file" type="file" />
+</form>
+```
+
+<a name="multipart"></a>
+### Multipart
+
+如果不是在网页上面上传，可以将参数组织成 `multipart/form-data` 然后向七牛发送`POST`请求。  
+可以使用各个语言对应的`multipart`库，最终他们都会组织成这样的形式：
+
+```
+POST http://up.qbox.me/
+Content-Type: multipart/form-data; boundary=<Boundary>
+<Boundary>
+
+Content-Disposition: form-data; name="key"
+<FileID>
+<Boundary>
+
+Content-Disposition: form-data; name="x:custom_field_name"
+<SomeVal>
+<Boundary>
+
+Content-Disposition: form-data; name="token"
+<UploadToken>
+<Boundary>
+
+Content-Disposition: form-data; name="file"; filename="<FileName>"
+Content-Type: <MimeType>
+
+<FileContent>
+```
+
+<a name="parameters"></a>
+## 参数介绍
+
+名称        | 类型   | 必须 | 说明
+------------|--------|------|-------------------------------------
+token       | string | 是   | 上传授权凭证 - UploadToken [详细](#uploadtoken)
+file        | file   | 是   | 文件本身
+key         | string | 否   | 标识文件的索引，所在的存储空间内唯一。key可包含`/`，但不以`/`开头。若不指定 key，缺省使用文件的 etag（即上传成功后返回的hash值）作为key。
+x:custom_field_name | string | 否 | 自定义变量，必须以 `x:` 开头命名，不限个数。`string`里面的内容是可以在 uploadToken 的 `callbackBody` 选项中使用 `$(x:custom_field_name)` 求值。 [详细](#)
+
+<a name="uploadtoken"></a>
+### UploadToken
+
+`uploadToken` 的得到是依靠对`JSON`格式参数的加密。App-Server 指定并且加密，App-Client 一次或者多次使用。加密算法见[xxx]()
+
+`uploadToken` 的内容：
+
+```
+{
+    scope: <Bucket string>,
+    deadline: <UnixTimestamp int64>,
+    endUser: <EndUserId string>,
+    returnUrl: <RedirectURL string>,
+    returnBody: <ResponseBodyForAppClient string>,
+    callbackBody: <RequestBodyForAppServer string>
+    callbackUrl: <RequestUrlForAppServer string>,
+    asyncOps: <asyncProcessCmds string>
+}
+```
+
+#### 参数详解：
+
+ 字段名       | 必须 | 说明
+--------------|------|-----------------------------------------------------------------------
+ scope        | 是   | 一般指文件要上传到的目标存储空间（`Bucket[:key]`）。若为`Bucket`，表示限定只能传到该`Bucket`（仅限于新增文件）；若为`Bucket:Key`，表示限定特定的文件，可修改该文件。
+ deadline     | 否   | 定义 uploadToken 的失效时间，Unix时间戳，精确到秒，缺省为 3600 秒
+ endUser      | 否   | 给上传的文件添加唯一属主标识，特殊场景下非常有用，比如根据App-Client标识给图片或视频打水印
+ returnUrl    | 否   | 设置用于浏览器端文件上传成功后，浏览器执行301跳转的URL，一般为`HTML Form`上传时使用。文件上传成功后会跳转到`returnUrl?query_string`, `query_string`会包含 `returnBody` 内容。
+ returnBody   | 否   | 文件上传成功后，自定义从七牛云存储最终返回給终端 App-Client 的数据。支持 [魔法变量](#)。
+ callbackBody | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的数据。支持 [魔法变量](#) 和 [自定义变量](#)。
+ callbackUrl  | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的URL，必须是公网上可以正常进行POST请求并能响应 HTTP Status 200 OK 的有效 URL 
+ asyncOps     | 否   | 指定文件（图片/音频/视频）上传成功后异步地执行指定的预转操作。每个预转指令是一个API规格字符串，多个预转指令可以使用分号`;`隔开。详细操作见[fop](#)
+
+**注意**
+
+- `callbackUrl` 与 `returnUrl` 不可同时指定，两者只可选其一。
+- `callbackBody` 与 `returnBody` 不可同时指定，两者只可选其一。
+
+<a name="response"></a>
+## 七牛的响应
+
+<a name="ordinary-upload"></a>
+### 普通上传
+普通上传时七牛直接将响应回复给上传资源的用户，回复格式为：
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Response Body: {
+    "name": "gogopher.jpg",
+    "size": 214513,
+    "type": "image/jpg",
+    "hash": "Fh8xVqod2MQ1mocfI4S4KpRL6D98",
+    "w": 640,
+    "h": 480,
+    "color": "sRGB"
+}
+```
+
+其中除了`hash`和`name`是默认返回的参数，其他参数都是`returnBody`中的[魔法变量](#)指定的。
+
+#### 失败处理
+
+若上传失败，且上传失败的原因不是由于`uploadToken`无效造成的，七牛云存储会返回如下应答：
+
+```
+HTTP/1.1 301 Moved Permanently
+Location: returnUrl?code={error_code}&error={error_message}
+```
+
+<a name="advanced-upload"></a>
+### 高级上传（带回调）
+
+高级上传时七牛会向用户上传时指定的`callbackUrl`发送`POST`请求。
+
+假如在上传是`callbackBody`中的值为
+
+```
+key=$(etag)&album=$(x:album_id)&uid=$(x:uid)
+```
+
+
+那么七牛云存储在向`callbackUrl`发送的`POST`包中会将`$(key)`替换成对应的值（[魔法变量](#)或者[自定义变量](#)），如
+
+```
+key=Fh8xVqod2MQ1mocfI4S4KpRL6D98&album=ablum1&uid=uid1
+```
+
+最后客户服务器返回数据到七牛云存储，七牛云存储再将这段数据原封不动地返回给用户。  
+内容没有限定，只需要为标准的`JSON`格式即可，如：
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Response Body: {
+    "foo": "bar",
+    "name": "gogopher.jpg",
+    "size": 214513,
+    "type": "image/jpg",
+    "w": 640,
+    "h": 480
+}
+```
+
+#### 失败处理
+如果文件上传成功，但是七牛云存储回调客户服务器失败，七牛云存储会将回调失败的信息连同 `callbackBody` 数据本身返回给用户, 用户可选自定义策略进行相应的处理。
+
 
 - [上传流程](#workflow)
     - [Local - 本地上传](#local-upload) 
