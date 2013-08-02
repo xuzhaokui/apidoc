@@ -1,7 +1,303 @@
 ---
 layout: default
-title: "上传接口"
+title: "上传方式"
 ---
+
+- [上传API](#upload-api)
+    - [Html Form Post](#html-form-post)
+    - [Multipart](#multipart)
+- [参数介绍](#parameters)
+	- [UploadToken](#uploadtoken)
+	- [魔法变量 - MagicVariables](#magic_variables)
+	- [自定义变量 - xVariables](#x_variables)
+- [七牛的响应](#response)
+	- [普通上传](#ordinary-upload)
+	- [高级上传（带回调）](#advanced-upload)
+- [错误码](#error-code)
+
+
+<a name="upload-api"></a>
+
+## 上传API
+
+上传可以通过 `http` 发送 `Post` 请求，支持两种格式
+
+<a name="html-form-post"></a>
+### HTML Form API
+
+使用 `HTML Form`
+
+```
+<form method="post" action="http://up.qbox.me/" enctype="multipart/form-data">
+  <input name="key" type="hidden" value="{FileID}">
+  <input name="x:custom_field_name" type="hidden" value="{SomeVal}">
+  <input name="token" type="hidden" value="{UploadToken}">
+  <input name="file" type="file" />
+</form>
+```
+    
+<a name="multipart"></a>
+### Multipart
+该 `HTML Form API` 还可以用如下 `multipart/form-data` 形式表达：
+
+```
+POST http://up.qbox.me/
+Content-Type: multipart/form-data; boundary=<Boundary>
+
+<Boundary>
+
+Content-Disposition: form-data; name="key"
+<FileID>
+
+<Boundary>
+
+Content-Disposition: form-data; name="x:custom_field_name"
+<SomeVal>
+
+<Boundary>
+
+Content-Disposition: form-data; name="token"
+<UploadToken>
+
+<Boundary>
+
+Content-Disposition: form-data; name="file"; filename="<FileName>"
+Content-Type: <MimeType>
+
+<FileContent>
+```
+    
+<a name="parameters"></a>
+## 参数介绍
+
+名称        | 类型   | 必须 | 说明
+------------|--------|------|-------------------------------------
+token       | string | 是   | 上传授权凭证 - UploadToken [详细](#uploadtoken)
+file        | file   | 是   | 文件本身
+key         | string | 否   | 标识文件的索引，所在的存储空间内唯一。key可包含`/`，但不以`/`开头。若不指定 key，缺省使用文件的 etag（即上传成功后返回的hash值）作为key
+x:custom_field_name | string | 否 | 自定义变量，必须以 `x:` 开头命名，不限个数。`string`里面的内容是可以在 uploadToken 的 `callbackBody` 选项中使用 `$(x:custom_field_name)` 求值。 [详细](#x_variables)
+
+<a name="uploadtoken"></a>
+### UploadToken
+
+`uploadToken` 的得到是依靠对参数的加密。App-Server 指定并且加密，App-Client 一次或者多次使用。
+
+<a name="uploadToken-algorithm"></a>
+
+#### 算法
+
+uploadToken 算法如下：
+
+```
+// 步骤1：组织元数据（JSONString）
+Flags = {
+    scope: <Bucket string>,
+    deadline: <UnixTimestamp int64>,
+    endUser: <EndUserId string>,
+    returnUrl: <RedirectURL string>,
+    returnBody: <ResponseBodyForAppClient string>,
+    callbackBody: <RequestBodyForAppServer string>
+    callbackUrl: <RequestUrlForAppServer string>,
+    asyncOps: <asyncProcessCmds string>
+}
+
+// 步骤2：将 Flags 进行安全编码
+EncodedFlags = urlsafe_base64_encode(JSONString(Flags))
+
+// 步骤3：将编码后的元数据混入私钥进行签名
+Signature = hmac_sha1(EncodedFlags, SecretKey)
+
+// 步骤4：将签名摘要值进行安全编码
+EncodedSign = urlsafe_base64_encode(Signature)
+
+// 步骤5：连接各字符串，生成上传授权凭证
+uploadToken = AccessKey:EncodedSign:EncodedFlags
+```
+
+**注意**
+
+- `Flags` 数据必须为标准的 [JSON](http://json.org/) 字符串
+- `Flags` 各字段里边的尖括号`<Variable Type>`内容表示要被替换掉的“变量”，“变量”的数据类型已在括号内指定
+- `urlsafe_base64_encode(string)` 函数按照标准的 [RFC 4648](http://www.ietf.org/rfc/rfc4648.txt) 实现，开发者可以参考 <https://github.com/qiniu> 上各SDK的样例代码。
+- `AccessKey:EncodedSign:EncodedFlags` 这里的冒号是字符串，仅作为连接分隔符使用，最终连接组合的 UploadToken 也是一个字符串（String）。
+- `callbackUrl` 与 `returnUrl` 不可同时指定，两者只可选其一。
+- `callbackBody` 与 `returnBody` 不可同时指定，两者只可选其一。
+
+#### 参数详解：
+
+ 字段名       | 必须 | 说明
+--------------|------|-----------------------------------------------------------------------
+ scope        | 是   | 一般指文件要上传到的目标存储空间（`Bucket[:key]`）。若为`Bucket`，表示限定只能传到该`Bucket`（仅限于新增文件）；若为`Bucket:Key`，表示限定特定的文件，可修改该文件。
+ deadline     | 否   | 定义 uploadToken 的失效时间，Unix时间戳，精确到秒，缺省为 3600 秒
+ endUser      | 否   | 给上传的文件添加唯一属主标识，特殊场景下非常有用，比如根据App-Client标识给图片或视频打水印
+ returnUrl    | 否   | 设置用于浏览器端文件上传成功后，浏览器执行301跳转的URL，一般为`HTML Form`上传时使用。文件上传成功后会跳转到`returnUrl?query_string`, `query_string`会包含 `returnBody` 内容。`returnUrl`不可与`callbackUrl`同时使用。
+ returnBody   | 否   | 文件上传成功后，自定义从七牛云存储最终返回給终端 App-Client 的数据。支持 [魔法变量](#magic_variables)，不可与`callbackBody`同时使用。
+ callbackBody | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的数据。支持 [魔法变量](#magic_variables) 和 [自定义变量](#x_variables)，不可与`returnBody`同时使用。
+ callbackUrl  | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的URL，必须是公网上可以正常进行POST请求并能响应 HTTP Status 200 OK 的有效 URL 
+ asyncOps     | 否   | 指定文件（图片/音频/视频）上传成功后异步地执行指定的预转操作。每个预转指令是一个API规格字符串，多个预转指令可以使用分号`;`隔开
+
+<a name="magic_variables"></a>
+### 魔法变量 - MagicVariables
+
+魔法变量是关于上传文件的一些基本信息。  
+App-Server 可以在 `returnBody` 或者 `callbackBody` 中指定魔法变量，在上传成功之后七牛云存储返回对应的魔法变量（对应`returnBody`）或者向 App-Server 发送POST请求的数据中带上魔法变量（对应`callbackBody`）。  
+
+在 `returnBody` 中，指定魔法变量的 `json` 格式为：
+
+```
+"key": $(magic_field)
+"key": $(magic_field.sub_field) //（在魔法变量存在子项的时候可这样指定）
+```
+
+一个典型的包含 MagicVariables 的`returnBody`字段声明如下（`returnBody`必须是一个JSON字符串）： 
+ 
+```
+Flags["returnBody"] = `{
+	"foo":  "bar",
+    "name": $(fname),
+    "size": $(fsize),
+    "type": $(mimeType),
+    "hash": $(etag),
+    "w":    $(imageInfo.width),
+    "h":    $(imageInfo.height),
+    "color": $(exif.ColorSpace.val)
+}`
+```
+
+假使如上，当一个用户在 iOS 端用包含该 `returnBody` 字段的 `uploadToken` 成功上传一张图片，那么该 iOS 端程序将收到如下一段 HTTP Response 应答：
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Response Body: {
+    "foo": "bar",
+    "name": "gogopher.jpg",
+    "size": 214513,
+    "type": "image/jpg",
+    "hash": "Fh8xVqod2MQ1mocfI4S4KpRL6D98",
+    "w": 640,
+    "h": 480,
+    "color": "sRGB"
+}
+```
+
+<a name="x_variables"></a>
+
+可用 MagicVariables 列表:
+
+API 名称  | 子项 | 说明
+----------|------|-------------------------------------------
+etag      | 无   | 文件上传成功后的 etag，上传前不指定 key 时，etag 等同于缺省的 key
+fname     | 无   | 原始文件名
+fsize     | 无   | 文件大小，单位: Byte
+mimeType  | 无   | 文件的资源类型，比如 .jpg 图片的资源类型为 `image/jpg`
+imageInfo | 有   | 获取所上传图片的基本信息，支持访问子字段
+exif      | 有   | 获取所上传图片EXIF信息，支持访问子字段
+endUser   | 无   | 获取 `uploadToken` 中指定的 `endUser` 选项的值，可用来标识终端用户
+
+`imageInfo` 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?imageInfo>  
+`exif` 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?exif>
+
+<a name="x_variables"></a>
+### 自定义变量 - xVariables
+
+自定义变量是 App-Client 上传资源时带的参数，通过七牛云存储以 `callbackBody` 的形式传给 App-Server。    
+即表格中的 `x:custom_field_name`，七牛云存储允许在 `form` 或 `multipart/form-data` 流中添加任意以 `x:` 开头的自定义字段，不限个数，例如：
+
+```
+<input name="x:uid" value="xxx">
+<input name="x:album_id" value="yyy">
+```
+
+这样，开发者在 `uploadToken` 的 `callbackBody` 选项里面就可以通过 `$(x:album_id)` 引用此自定义字段的值。
+
+例如此时 `callbackBody` 可以设置为`key=$(etag)&album=$(x:album_id)&uid=$(x:uid)`  
+App-Server 通过此设置即可得到 App-Client 端文件上传成功后附带的自定义变量的值。  
+
+<a name="response"></a>
+## 七牛的响应
+
+<a name="ordinary-upload"></a>
+### 普通上传
+普通上传时七牛直接将响应回复给上传资源的用户，回复格式为：
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Response Body: {
+    "name": "gogopher.jpg",
+    "size": 214513,
+    "type": "image/jpg",
+    "hash": "Fh8xVqod2MQ1mocfI4S4KpRL6D98",
+    "w": 640,
+    "h": 480,
+    "color": "sRGB"
+}
+```
+其中除了`hash`和`name`是默认参数，其他返回参数都是`returnBody`中的`MagicVariables`指定的。
+
+#### 失败处理
+
+若上传失败，且上传失败的原因不是由于`uploadToken`无效造成的，七牛云存储会返回如下应答：
+
+```
+HTTP/1.1 301 Moved Permanently
+Location: returnUrl?code={error_code}&error={error_message}
+```
+
+<a name="advanced-upload"></a>
+### 高级上传（带回调）
+高级上传时七牛会向用户上传时指定的`callbackUrl`发送`POST`请求。
+
+假如在上传是`callbackBody`中的值为  
+
+```
+key=$(etag)&album=$(x:album_id)&uid=$(x:uid)
+```
+
+
+那么七牛云存储在向`callbackUrl`发送的`POST`包中会将$(key)替换成对应的值（魔法变量或者自定义变量），如
+
+```
+key=Fh8xVqod2MQ1mocfI4S4KpRL6D98&album=ablum1&uid=uid1
+```
+
+最后客户服务器返回数据到七牛云存储，七牛云存储再将这段数据原封不动地返回给用户。  
+内容没有限定，只需要为标准的`JSON`格式即可，如：
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Response Body: {
+    "foo": "bar",
+    "name": "gogopher.jpg",
+    "size": 214513,
+    "type": "image/jpg",
+    "w": 640,
+    "h": 480
+}
+```
+
+#### 失败处理
+如果文件上传成功，但是七牛云存储回调客户服务器失败，七牛云存储会将回调失败的信息连同 `callbackBody` 数据本身返回给用户, 用户可选自定义策略进行相应的处理。
+
+<a name="error-code"></a>
+## 错误代码
+
+HTTP 状态码 | 错误说明
+------------|-----------------------------------------------------------------
+400         | 请求参数错误
+401         | 认证授权失败，可能是 AccessKey/SecretKey 错误或 UploadToken 无效
+405         | 请求方式错误，非预期的请求方式
+579         | 文件上传成功，但是回调（callback app-server）失败
+599         | 服务端操作失败
+614         | 文件已存在
+631         | 指定的存储空间（Bucket）不存在
+701         | 上传数据块校验出错
+
 
 - [上传流程](#workflow)
     - [Local - 本地上传](#local-upload) 
