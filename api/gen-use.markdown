@@ -11,9 +11,10 @@ title: "访问概述"
   - [Access Token](#access-token)
 - [上传模型](#upload-models)
   - [本地上传](#local-upload)
-  - [客户端直传](#client-direct)
-  - [回调上传](#callback-upload)
-  - [重定向](#redirect-upload)
+  - [客户端加速直传](#client-direct)
+    - [普通上传](#normal-upload)
+    - [高级上传 - 重定向功能](#redirect-upload)
+    - [高级上传 - 回调功能](#callback-upload)
 - [下载模型](#download-models)
   - [公有资源下载](#public-download)
   - [私有资源下载](#private-download)
@@ -141,27 +142,26 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 
 ### 本地上传
 
-<a name="client-direct"></a>
+所谓本地上传，是将用户的本地资源同步到七牛云存储的过程。存放在用户服务器中的数据文件，或者用户桌面计算机中的存档文件等等，都可以通过这种方式，方便地同步到七牛云存储
 
-所谓本地上传，即一个将您的本地资源同步到七牛云端的过程。
-
-如果您需要将手头现有的一批数据同步到七牛云端，那么这种上传方式就是为您准备的。我们已经为您准备好了各种平台上的文件上传工具，不管您的数据量有多么庞大，别担心，这都将会是一个简单而又愉快的过程。
-
-我们提供了下面两种同步工具，可以帮助您轻松地将文件同步到七牛云端：
+七牛云存储提供了下面两种同步工具，可以帮助您轻松地将文件同步到七牛云存储：
 
 | 名称 | 使用   | 适用平台   | 说明 |
 |-----|--------|----------------|----|
 | [qrsync](/tools/qrsync.html) | 命令行 | Linux,Windows,MacOSX,FreeBSD | 手动同步文件/文件夹到七牛云存储 |
 | [qiniu-autosync](/tools/qiniu-autosync.html) | 命令行 | Linux | 自动同步指定文件夹内的新增或改动文件 |
 
-当然，本地上传工具只是我们提供给您所有工具的一部分，更多工具，您可以到[这里](tools/index.html)查看。
+当然，本地上传工具只是七牛云存储提供给您所有工具的一部分，更多工具，您可以到[这里](tools/index.html)查看。
 
-### 客户端直传
+<a name="client-direct"></a>
 
-<a name="callback-upload"></a>
-如果您的业务需要将资源通过您的网站(Web)或者移动应用(App)等终端上传到七牛云端，那么这种上传方式就是为您设计的。
+### 客户端加速直传
 
-我们精心设计了两种上传模型，分别适用于不同的业务场景。
+对于开发互联网业务的用户，需要通过网站（web）或者各类客户端等终端向七牛云存储上传资源。客户端加速直传可以很好地满足这类用户的需求。
+
+七牛云存储精心设计了多种上传模型，分别适用于不同的业务场景。
+
+<a name="normal-upload"></a>
 
 #### 普通上传
 
@@ -172,28 +172,25 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 流程简述：
 
 1. App-Client 向 App-Server 请求上传文件
-2. App-Server 使用 Qiniu-SDK 生成上传授权凭证（UploadToken），并颁发给 App-Client
-3. App-Client 取得上传授权许可（UploadToken）后，使用 Qiniu-Client-SDK 直传文件到最近的存储节点
-4. 文件上传成功后，Qiniu 返回给 App-Client 上传结果（可包含相应的文件信息）
+2. App-Server 使用相应的[算法](#upload-token)或者使用七牛提供的 SDK 生成上传凭证（UploadToken），并颁发给 App-Client
+3. App-Client 取得上传许可（UploadToken）后，使用七牛提供的 SDK 或者直接使用[上传 API](api/put.html) 直传文件到最近的存储节点
+4. 文件上传成功后，Qiniu-Cloud-Storage 返回给 App-Client 上传结果（可包含相应的文件信息）
 5. App-Client 将文件上传结果及相关信息汇报给 App-Server，App-Server 可写表做记录等操作
 
-在普通上传模型中，一个完整的上传动作除了实际传输文件到七牛云端之外，所有的业务逻辑都由业务方自由实现，因此这种模型适用于业务终端(App-Client)和业务服务器(App-Server)之间有着较为复杂的自定义业务逻辑的场景中。
+在普通上传模型中，一个完整的上传流程中除了实际的文件传输过程外，所有的业务逻辑都由业务方自由实现，因此这种模型适用于业务终端(App-Client)和业务服务器(App-Server)之间有着较为复杂的自定义业务逻辑的场景中。
 
 如果您的业务逻辑符合这种模型，请参考[这里](api/put.html)查看更多信息。
 
-
-#### 高级上传
-
-除了第一种普通上传模型之外，我们还提供另一种相对高级的上传模型，在这种模型中，我们七牛云端的服务器不单会以一个文件传输的接受者，还会参与到其余的业务逻辑中去，以此来帮助您简化业务逻辑的实现。
+除了普通上传模型之外，七牛云存储还提供几种相对高级的上传模型，在这些模型中，七牛云端的服务器不仅仅接收用户上传的文件，还会参与到其余的业务逻辑中去，以此来帮助您简化业务逻辑的实现。
 
 高级上传中主要分为两种模型：
 
-1. 一类是重定向模型，可以让我们的服务器在文件上传结束后通知业务客户端（App-Client）进行301跳转操作。
-2. 另一类是回调模型，可以让我们的服务器在文件上传结束后回调一个指定的URL以通知业务服务器（App-Server）。
+1. 一类是重定向模型，可以让七牛云存储的服务器在文件上传结束后通知业务客户端（App-Client）进行301跳转操作。
+2. 另一类是回调模型，可以让七牛云存储的服务器在文件上传结束后回调一个指定的URL以通知业务服务器（App-Server）。
 
-##### 重定向模型（Redirect）
+<a name="redirect-upload"></a>
 
-<a name="download-models"></a>
+##### 高级上传 - 重定向功能
 
 重定向模型和普通上传模型很相似，只是七牛服务器在上传成功后会返回给上传者一个301跳转，使其跳转到指定的页面。
 
@@ -204,15 +201,14 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 流程简述：
 
 1. App-Client 向 App-Server 请求上传文件
-2. App-Server 使用 Qiniu-SDK 生成上传授权凭证（UploadToken），并颁发给 App-Client
-3. App-Client 取得上传授权许可（UploadToken）后，使用 Qiniu-Client-SDK 直传文件到最近的存储节点
-4. 文件上传成功后，Qiniu 将返回状态码为 301 的重定向HTTP Response 给上传者App-Client（可包含相应的文件信息）
+2. App-Server 使用相应的[算法](#upload-token)或者使用七牛提供的 SDK 生成上传凭证（UploadToken），并颁发给 App-Client
+3. App-Client 取得上传许可（UploadToken）后，使用七牛提供的 SDK 或者直接使用[上传 API](api/put.html) 直传文件到最近的存储节点
+4. 文件上传成功后，Qiniu-Cloud-Storage 将返回状态码为 301 的重定向HTTP Response 给上传者App-Client（可包含相应的文件信息）
 5. App-Client 访问跳转到重定向页面。
 
+<a name="callback-upload"></a>
 
-##### 回调模型（Callback）
-
-<a name="redirect-upload"></a>
+##### 高级上传 - 回调功能
 
 一个回调模型典型的上传流程为：
 
@@ -221,11 +217,11 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 流程简述：
 
 1. App-Client 向 App-Server 请求上传文件
-2. App-Server 使用 Qiniu-SDK 生成上传授权凭证（UploadToken），并颁发给 App-Client
-3. App-Client 取得上传授权许可（UploadToken）后，使用 Qiniu-Client-SDK 直传文件到最近的存储节点
-4. 文件上传成功后，Qiniu 以 HTTP POST 方式告知 App-Server 上传结果（可包含相应的文件信息）
-5. App-Server 可写表做记录等操作，然后经 Qiniu 中转返回给 App-Client 它想要的信息
-6. Qiniu 作为代理，原封不动地将回调 App-Server 的返回结果回传给 App-Client
+2. App-Server 使用相应的[算法](#upload-token)或者使用七牛提供的 SDK 生成上传凭证（UploadToken），并颁发给 App-Client
+3. App-Client 取得上传许可（UploadToken）后，使用七牛提供的 SDK 或者直接使用[上传 API](api/put.html) 直传文件到最近的存储节点
+4. 文件上传成功后，Qiniu-Cloud-Storage 以 HTTP POST 方式告知 App-Server 上传结果（可包含相应的文件信息）
+5. App-Server 处理完回调的请求后返回相应的结果信息，经 Qiniu-Cloud-Storage 中转返回给 App-Client
+6. Qiniu-Cloud-Storage 作为代理，原封不动地将回调 App-Server 的返回结果回传给 App-Client
 
 
 回调模型相对于普通上传更为高级，体现在以下几方面:
@@ -234,7 +230,7 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 2. Callback 环节加速，七牛云存储的就近节点能以比 App-Client 更优异的网络回调 App-Server。
 3. 只要文件上传成功，App-Server 必然知情。即使 App-Server 回调失败，App-Client 还是会得到完整的回调数据，可自定义策略进行异步处理。
 
-在这种上传模型中，七牛云端的服务器不只是作为文件传输的接受和存储者，同时也参与到了其余的业务逻辑中，为您的业务服务器(App-Server)和业务客户端(App-Client)简化了业务逻辑的实现。同时，利用我们服务器端的网络优势，可以缩短整个流程的完成时间，并大大提高一次上传流程的成功率。
+在这种上传模型中，七牛云存储的服务器不只是作为文件传输的接受和存储者，同时也参与到了其余的业务逻辑中，为您的业务服务器(App-Server)和业务客户端(App-Client)简化了业务逻辑的实现。同时，利用七牛云存储服务器端的网络优势，可以缩短整个流程的完成时间，并大大提高一次上传流程的成功率。
 
 如果您的业务逻辑符合这种模型，请参考[这里](api/put.html)查看更多信息。
 
