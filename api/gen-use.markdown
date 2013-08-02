@@ -72,7 +72,7 @@ SecretKey同AccessKey一一对应，用户使用ScreteKey对请求签名，而�
 
 <a name="upload-token"></a>
 
-### Upload Token
+#### Upload Token
 
 Upload Token用于资源上传请求的验证。由上传请求（使用[mulit-part格式的POST方法]()）的token字段携带，发送至七牛云存储。
 
@@ -92,7 +92,7 @@ Upload Token用于资源上传请求的验证。由上传请求（使用[mulit-p
 
 <a name="download-token"></a>
 
-### Download Token
+#### Download Token
 
 Download Token用于[私有资源]()的下载，以及对私有资源作云处理时的请求验证。由下载URL的[token参数]()携带，发送至七牛云存储。
 
@@ -111,7 +111,7 @@ Download Token用于[私有资源]()的下载，以及对私有资源作云处�
 
 <a name="access-token"></a>
 
-### Access Token
+#### Access Token
 
 Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP头中的`Authorization`字段携带，发送至七牛云存储。
 
