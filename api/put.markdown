@@ -148,7 +148,7 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 }
 ```
 
-### 参数详解：
+**参数详解** ：
 
  字段名       | 必须 | 说明
 --------------|------|-----------------------------------------------------------------------
@@ -166,6 +166,52 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 - `callbackUrl` 与 `returnUrl` 不可同时指定，两者只可选其一。
 - `callbackBody` 与 `returnBody` 不可同时指定，两者只可选其一。
 
+<a name="upload-token"></a>
+
+## 上传凭证（uploadToken）
+
+术语        | 说明
+------------|-------------------------------
+AccessKey   | 公钥，可用于识别七牛云存储帐号
+SecretKey   | 密钥，可用于签名过程中进行加密
+uploadToken | 令牌，也称上传授权凭证
+
+uploadToken 有 3 个作用:
+
+1. 识别 App-Client 的身份是否合法
+2. 识别 App-Client 的请求是否合法
+3. 双重识别合法的情况下，可以根据 uploadToken 元数据针对上传行为个性化处理
+
+
+<a name="uploadToken-algorithm"></a>
+
+### 算法
+
+uploadToken 算法如下：
+
+    // 步骤1：组织元数据（JSONString）
+    Flags = {
+        scope: <Bucket string>,
+        deadline: <UnixTimestamp int64>,
+        endUser: <EndUserId string>,
+        returnUrl: <RedirectURL string>,
+        returnBody: <ResponseBodyForAppClient string>,
+        callbackBody: <RequestBodyForAppServer string>
+        callbackUrl: <RequestUrlForAppServer string>,
+        asyncOps: <asyncProcessCmds string>
+    }
+
+    // 步骤2：将 Flags 进行安全编码
+    EncodedFlags = urlsafe_base64_encode(JSONString(Flags))
+
+    // 步骤3：将编码后的元数据混入私钥进行签名
+    Signature = hmac_sha1(EncodedFlags, SecretKey)
+
+    // 步骤4：将签名摘要值进行安全编码
+    EncodedSign = urlsafe_base64_encode(Signature)
+
+    // 步骤5：连接各字符串，生成上传授权凭证
+    uploadToken = AccessKey:EncodedSign:EncodedFlags
 
 <a name="response"></a>
 
@@ -359,52 +405,6 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 
 ========================== 未完成分割线 ==========================
 
-<a name="uploadToken"></a>
-
-## 凭证 - uploadToken
-
-术语        | 说明
-------------|-------------------------------
-AccessKey   | 公钥，可用于识别七牛云存储帐号
-SecretKey   | 密钥，可用于签名过程中进行加密
-uploadToken | 令牌，也称上传授权凭证
-
-uploadToken 有 3 个作用:
-
-1. 识别 App-Client 的身份是否合法
-2. 识别 App-Client 的请求是否合法
-3. 双重识别合法的情况下，可以根据 uploadToken 元数据针对上传行为个性化处理
-
-
-<a name="uploadToken-algorithm"></a>
-
-### 算法
-
-uploadToken 算法如下：
-
-    // 步骤1：组织元数据（JSONString）
-    Flags = {
-        scope: <Bucket string>,
-        deadline: <UnixTimestamp int64>,
-        endUser: <EndUserId string>,
-        returnUrl: <RedirectURL string>,
-        returnBody: <ResponseBodyForAppClient string>,
-        callbackBody: <RequestBodyForAppServer string>
-        callbackUrl: <RequestUrlForAppServer string>,
-        asyncOps: <asyncProcessCmds string>
-    }
-
-    // 步骤2：将 Flags 进行安全编码
-    EncodedFlags = urlsafe_base64_encode(JSONString(Flags))
-
-    // 步骤3：将编码后的元数据混入私钥进行签名
-    Signature = hmac_sha1(EncodedFlags, SecretKey)
-
-    // 步骤4：将签名摘要值进行安全编码
-    EncodedSign = urlsafe_base64_encode(Signature)
-
-    // 步骤5：连接各字符串，生成上传授权凭证
-    uploadToken = AccessKey:EncodedSign:EncodedFlags
 
 **注意**
 
