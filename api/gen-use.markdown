@@ -162,7 +162,7 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 
 典型的上传流程如下图所示：
 
-![普通上传](api/img/normal_upload.png)
+![普通上传](img/normal_upload.png)
 
 流程简述：
 
@@ -183,7 +183,7 @@ Access Token用于[资源管理]()的请求验证。由资源管理请求的HTTP
 
 一个重定向模型典型的上传流程如下图所示：
 
-![高级上传(带重定向)](api/img/redirect_upload.png)
+![高级上传(带重定向)](img/redirect_upload.png)
 
 流程简述：
 
@@ -205,7 +205,7 @@ Client。
 
 一个回调上传模型典型的上传流程为：
 
-![高级上传(带回调)](api/img/callback_upload.png)
+![高级上传(带回调)](img/callback_upload.png)
 
 流程简述：
 
