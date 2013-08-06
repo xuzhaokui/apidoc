@@ -176,7 +176,7 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 
 1. 构造[上传策略](#put-policy)。用户根据业务需求，确定上传策略的要素，构造出具体的上传策略。比如，有用户需要向空间 `my-bucket` 上传一个名为 `sunflower.jpg` 的图片，有效期是到 `2015-12-31 00:00:00`，并且希望得到图片的名称、大小、宽、高和校验值。那么相应的上传策略的字段分别为：
 
-```
+    ```
     scope = "my-bucket:sunflower.jpg"
     deadline = 1451491200
     returnUrl = '{
@@ -186,25 +186,25 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
       "h": $(imageInfo.height),
       "hash": $(etag),
     }'
-```
+    ```
 
 2. 将上传策略序列化成为json格式。用于可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
 
-```
+    ```
     put_policy = '{"scope":"my-bucket:sunflower.jpg","deadline":1451491200,"returnUrl":"{\"name\": $(fname),\"size\": $(fsize),\"w\": $(imageInfo.width),\"h\": $(imageInfo.height),\"hash\": $(etag),}"}'
-```
+    ```
 
 3. 对json序列化后的上传策略进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)：
 
-```
+    ```
     encoded = urlsafe_base64_encode(put_policy)
-```
+    ```
 
-  得到
+    得到
 
-```
+    ```
     "eyJzY29wZSI6Im15LWJ1Y2tldDpzdW5mbG93ZXIuanBnIiwiZGVhZGxpbmUiOjE0NTE0OTEyMDAsInJldHVyblVybCI6IntcIm5hbWVcIjogJChmbmFtZSksXCJzaXplXCI6ICQoZnNpemUpLFwid1wiOiAkKGltYWdlSW5mby53aWR0aCksXCJoXCI6ICQoaW1hZ2VJbmZvLmhlaWdodCksXCJoYXNoXCI6ICQoZXRhZyksfSJ9"
-```
+    ```
 
 4. 用SecretKey对编码后的上传策略进行HMAC-SHA1加密，并且做URL安全的Base64编码：
 
