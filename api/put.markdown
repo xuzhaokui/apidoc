@@ -168,50 +168,68 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 
 <a name="upload-token"></a>
 
-## 上传凭证（uploadToken）
+## 上传凭证（Upload Token）
 
-术语        | 说明
-------------|-------------------------------
-AccessKey   | 公钥，可用于识别七牛云存储帐号
-SecretKey   | 密钥，可用于签名过程中进行加密
-uploadToken | 令牌，也称上传授权凭证
+上传凭证是七牛云存储用于验证上传请求合法性的机制。用户通过上传凭证授权客户端，使其具备访问指定资源的能力。
 
-uploadToken 有 3 个作用:
+上传凭证算法如下：
 
-1. 识别 App-Client 的身份是否合法
-2. 识别 App-Client 的请求是否合法
-3. 双重识别合法的情况下，可以根据 uploadToken 元数据针对上传行为个性化处理
+1. 构造[上传策略](#put-policy)。用户根据业务需求，确定上传策略的要素，构造出具体的上传策略。比如，有用户需要向空间 `my-bucket` 上传一个名为 `sunflower.jpg` 的图片，有效期是到 `2015-12-31 00:00:00`，并且希望得到图片的名称、大小、宽、高和校验值。那么相应的上传策略的字段分别为：
 
+```
+    scope = "my-bucket:sunflower.jpg"
+    deadline = 1451491200
+    returnUrl = '{
+      "name": $(fname),
+      "size": $(fsize),
+      "w": $(imageInfo.width),
+      "h": $(imageInfo.height),
+      "hash": $(etag),
+    }'
+```
 
-<a name="uploadToken-algorithm"></a>
+1. 将上传策略序列化成为json格式。用于可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
 
-### 算法
+```
+    put_policy = '{"scope":"my-bucket:sunflower.jpg","deadline":1451491200,"returnUrl":"{\"name\": $(fname),\"size\": $(fsize),\"w\": $(imageInfo.width),\"h\": $(imageInfo.height),\"hash\": $(etag),}"}'
+```
 
-uploadToken 算法如下：
+1. 对json序列化后的上传策略进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)：
 
-    // 步骤1：组织元数据（JSONString）
-    Flags = {
-        scope: <Bucket string>,
-        deadline: <UnixTimestamp int64>,
-        endUser: <EndUserId string>,
-        returnUrl: <RedirectURL string>,
-        returnBody: <ResponseBodyForAppClient string>,
-        callbackBody: <RequestBodyForAppServer string>
-        callbackUrl: <RequestUrlForAppServer string>,
-        asyncOps: <asyncProcessCmds string>
-    }
+```
+    encoded = urlsafe_base64_encode(put_policy)
+```
 
-    // 步骤2：将 Flags 进行安全编码
-    EncodedFlags = urlsafe_base64_encode(JSONString(Flags))
+    得到
 
-    // 步骤3：将编码后的元数据混入私钥进行签名
-    Signature = hmac_sha1(EncodedFlags, SecretKey)
+```
+    "eyJzY29wZSI6Im15LWJ1Y2tldDpzdW5mbG93ZXIuanBnIiwiZGVhZGxpbmUiOjE0NTE0OTEyMDAsInJldHVyblVybCI6IntcIm5hbWVcIjogJChmbmFtZSksXCJzaXplXCI6ICQoZnNpemUpLFwid1wiOiAkKGltYWdlSW5mby53aWR0aCksXCJoXCI6ICQoaW1hZ2VJbmZvLmhlaWdodCksXCJoYXNoXCI6ICQoZXRhZyksfSJ9"
+```
 
-    // 步骤4：将签名摘要值进行安全编码
-    EncodedSign = urlsafe_base64_encode(Signature)
+1. 用SecretKey对编码后的上传策略进行HMAC-SHA1加密，并且做URL安全的Base64编码：
 
-    // 步骤5：连接各字符串，生成上传授权凭证
-    uploadToken = AccessKey:EncodedSign:EncodedFlags
+```
+    signature = hmac_sha1(SecretKey, encoded)
+    encode_signed = urlsafe_base64_encode(signature)
+```
+
+    假设用户的 `SecretKey="Yx0hNBifQ5V5SqLUkzPkjyy0pbYJpav9CH1QzkG0"` 加密后的结果是：
+
+```
+    "5Cr3Nrw0qkyYKfQicd_ejAdIrfs="
+```
+
+1. 最后，将 `AccessKey`、`encode_signed` 和 `encoded` 用 “:” 连接起来：
+
+```
+    upload_token = AccessKey + ":" + encode_signed + ":" + encoded
+```
+    假设用户的 `AccessKey="j6XaEDm5DwWvn0H9TTJs9MugjunHK8Cwo3luCglo"` 。最后得到的上传凭证为：
+
+```
+    j6XaEDm5DwWvn0H9TTJs9MugjunHK8Cwo3luCglo:5Cr3Nrw0qkyYKfQicd_ejAdIrfs=:eyJzY29wZSI6Im15LWJ1Y2tldDpzdW5mbG93ZXIuanBnIiwiZGVhZGxpbmUiOjE0NTE0OTEyMDAsInJldHVyblVybCI6IntcIm5hbWVcIjogJChmbmFtZSksXCJzaXplXCI6ICQoZnNpemUpLFwid1wiOiAkKGltYWdlSW5mby53aWR0aCksXCJoXCI6ICQoaW1hZ2VJbmZvLmhlaWdodCksXCJoYXNoXCI6ICQoZXRhZyksfSJ9
+```
+
 
 <a name="response"></a>
 
