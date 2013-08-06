@@ -188,13 +188,13 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
     }'
 ```
 
-1. 将上传策略序列化成为json格式。用于可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
+2. 将上传策略序列化成为json格式。用于可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
 
 ```
     put_policy = '{"scope":"my-bucket:sunflower.jpg","deadline":1451491200,"returnUrl":"{\"name\": $(fname),\"size\": $(fsize),\"w\": $(imageInfo.width),\"h\": $(imageInfo.height),\"hash\": $(etag),}"}'
 ```
 
-1. 对json序列化后的上传策略进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)：
+3. 对json序列化后的上传策略进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)：
 
 ```
     encoded = urlsafe_base64_encode(put_policy)
@@ -206,7 +206,7 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
     "eyJzY29wZSI6Im15LWJ1Y2tldDpzdW5mbG93ZXIuanBnIiwiZGVhZGxpbmUiOjE0NTE0OTEyMDAsInJldHVyblVybCI6IntcIm5hbWVcIjogJChmbmFtZSksXCJzaXplXCI6ICQoZnNpemUpLFwid1wiOiAkKGltYWdlSW5mby53aWR0aCksXCJoXCI6ICQoaW1hZ2VJbmZvLmhlaWdodCksXCJoYXNoXCI6ICQoZXRhZyksfSJ9"
 ```
 
-1. 用SecretKey对编码后的上传策略进行HMAC-SHA1加密，并且做URL安全的Base64编码：
+4. 用SecretKey对编码后的上传策略进行HMAC-SHA1加密，并且做URL安全的Base64编码：
 
 ```
     signature = hmac_sha1(SecretKey, encoded)
@@ -219,7 +219,7 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
     "5Cr3Nrw0qkyYKfQicd_ejAdIrfs="
 ```
 
-1. 最后，将 `AccessKey`、`encode_signed` 和 `encoded` 用 “:” 连接起来：
+5. 最后，将 `AccessKey`、`encode_signed` 和 `encoded` 用 “:” 连接起来：
 
 ```
     upload_token = AccessKey + ":" + encode_signed + ":" + encoded
