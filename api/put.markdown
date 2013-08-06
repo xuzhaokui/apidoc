@@ -357,65 +357,7 @@ x:<custom_field_name> | string | 否 | 自定义变量，必须以 `x:` 开头�
 1. 七牛云存储完成回调后，将获得的回调返回信息，原封不动地反馈给应用客户端。
 
 
-
-<a name="upload-api"></a>
-
-## 上传API
-
-HTML Form API
-
-    <form method="post" action="http://up.qiniu.com/" enctype="multipart/form-data">
-      <input name="key" type="hidden" value="{FileID}">
-      <input name="x:custom_field_name" type="hidden" value="{SomeVal}">
-      <input name="token" type="hidden" value="{UploadToken}">
-      <input name="file" type="file" />
-    </form>
-
-参数
-
-名称        | 类型   | 必须 | 说明
-------------|--------|------|-------------------------------------
-key         | string | 否   | 标识文件的索引，所在的存储空间内唯一。key可包含斜杠，但不以斜杠开头，比如 `a/b/c.jpg` 是一个合法的key。若不指定 key，缺省使用文件的 etag（即上传成功后返回的hash值）作为key；此时若 UploadToken 有指定 returnUrl 选项，则文件上传成功后跳转到 `returnUrl?query_string`, query_string 包含`key={FileID}`
-x:custom_field_name | string | 否 | [自定义变量](#xVariables)，必须以 `x:` 开头命名，不限个数。可以在 uploadToken 的 `callbackBody` 选项中使用 `$(x:custom_field_name)` 求值。
-token       | string | 是   | 上传授权凭证 - UploadToken
-file        | file   | 是   | 文件本身
-
-该 HTML Form API 还可以用如下 `multipart/form-data` 形式表达。
-
-    POST http://up.qiniu.com/
-    Content-Type: multipart/form-data; boundary=<Boundary>
-
-    <Boundary>
-    Content-Disposition: form-data; name="key"
-
-    <FileID>
-
-    <Boundary>
-    Content-Disposition: form-data; name="x:custom_field_name"
-
-    <SomeVal>
-
-    <Boundary>
-    Content-Disposition: form-data; name="token"
-
-    <UploadToken>
-
-    <Boundary>
-    Content-Disposition: form-data; name="file"; filename="<FileName>"
-    Content-Type: <MimeType>
-
-    <FileContent>
-
-上传完毕，Qiniu-Cloud-Storage 向 App-Client 返回如下信息：
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-    Cache-Control: no-store
-    Response Body: {
-        hash: <FileETag string>,
-        ...
-    }
-
+========================== 未完成分割线 ==========================
 
 <a name="uploadToken"></a>
 
