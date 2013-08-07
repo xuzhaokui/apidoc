@@ -156,7 +156,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
  deadline     | 是   | 定义上传请求的失效时间，[Unix时间戳](http://en.wikipedia.org/wiki/Unix_time)，单位为秒。
  endUser      | 否   | 给上传的文件添加唯一属主标识，特殊场景下非常有用，比如根据App-Client标识给图片或视频打水印
  returnUrl    | 否   | 设置用于浏览器端文件上传成功后，浏览器执行301跳转的URL，一般为`HTML Form`上传时使用。文件上传成功后会跳转到`returnUrl?query_string`, `query_string`会包含 `returnBody` 内容。
- returnBody   | 否   | 文件上传成功后，自定义从七牛云存储最终返回給终端 App-Client 的数据。支持 [魔法变量](#)。
+ returnBody   | 否   | 文件上传成功后，自定义从七牛云存储最终返回給终端 App-Client 的数据。支持 [魔法变量](#)和[自定义变量](#)。
  callbackBody | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的数据。支持 [魔法变量](#) 和 [自定义变量](#)。
  callbackUrl  | 否   | 文件上传成功后，七牛云存储向 App-Server 发送POST请求的URL，必须是公网上可以正常进行POST请求并能响应 HTTP Status 200 OK 的有效 URL 
  asyncOps     | 否   | 指定文件（图片/音频/视频）上传成功后异步地执行指定的预转操作。每个预转指令是一个API规格字符串，多个预转指令可以使用分号`;`隔开。详细操作见[fop](#)
@@ -179,7 +179,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
     ```
     scope = "my-bucket:sunflower.jpg"
     deadline = 1451491200
-    returnUrl = '{
+    returnBody = '{
       "name": $(fname),
       "size": $(fsize),
       "w": $(imageInfo.width),
@@ -331,9 +331,155 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
 
 ### Callback Body
 
-同普通客户端直传和重定向上传一样，用户也可以控制回调中传递到客户回调URL的反馈信息。`callbackBody` 的格式同 `returnBody` 一样。但 `callbackBody` 除了可以使用“魔法变量”外，还可以使用[用户自定义变量]()。当客户端发送上传请求时，携带的 `x:<variable>` 参数将被七牛云存储提取出来，根据 `callbackBody` 中用户的设定，填充到回调反馈信息中。
+同普通客户端直传和重定向上传一样，用户也可以控制回调中传递到客户回调服务器的反馈信息。`callbackBody` 的格式如下：
 
-在用户使用回调上传时，如果文件上传成功，但七牛云存储回调客户服务器失败，七牛云存储会将回调失败的信息连同 `callbackBody` 数据本身返回给App-Client, 用户可根据自己的策略进行相应的处理。
+```
+  <item>=(<magic variable>|<x variable>)[&<item>=(<magic variable>|<x variable>)...]
+```
+
+一个典型的 `callbackBody` 设置如下：
+
+```
+  put_policy = '{
+    ...
+    "callbackBody" : "name=$(fname)&hash=$(etag)&location=$(x:location)&=$(x:prise)"
+    ...
+  }'
+```
+
+这个 `callbackBody` 中，混合使用了魔法变量和自定义变量。假设应用客户端发出了如下的上传请求：
+
+```
+  <form method="post" action="http://up.qiniu.com/" enctype="multipart/form-data">
+    <input name="key" type="hidden" value="sunflower.jpg">
+    <input name="x:location" type="hidden" value="Shanghai">
+    <input name="x:prise" type="hidden" value="1500.00">
+    <input name="token" type="hidden" value="...">
+    <input name="file" type="file" />
+  </form>
+```
+
+其中，发送了自定义变量的值 `x:location = Shanghai` 和 `x:prise = Shanghai` ，而魔法变量 `$(fname)` 和 `$(etag)` 七牛云存储将根据上传资源的实际情况求值填写。
+
+七牛云存储完成上传后，便可以构造出回调的反馈信息：
+
+```
+  name=sunflower.jpg&hash=Fn6qeQi4VDLQ347NiRm-RlQx_4O2&location=Shanghai&prise=1500.00
+```
+
+之后，再对其进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)：
+
+```
+  bmFtZT1zdW5mbG93ZXIuanBnJmhhc2g9Rm42cWVRaTRWRExRMzQ3TmlSbS1SbFF4XzRPMiZsb2NhdGlvbj1TaGFuZ2hhaSZwcmlzZT0xNTAwLjAw
+```
+
+这组信息将放置在请求体中，随回调请求发往用户指定的回调服务器。
+
+在用户使用回调上传时，如果文件上传成功，但七牛云存储回调客户服务器失败，七牛云存储会将回调失败的信息返回给应用客户端, 用户可根据自己的策略进行相应的处理。
+
+<a name="redirect-response"></a>
+
+### 重定向的反馈
+
+当用户构造上传请求时，设置了 `returnUrl` 参数后，便激活了重定向功能。在成功完成上传后，七牛云存储会向客户端反馈 `HTTP 301` 。如果同时也设置了 `returnBody` ，那么七牛云存储会将构造好的反馈信息附加在重定向URL中，反馈给客户端：
+
+```
+    HTTP/1.1 301 Moved Permanently
+    Location: <returnUrl>?upload_ret=<Encoded-Return-Body>
+```
+
+客户端收到这样的反馈，会以 `Location` 所制定的URL执行重定向操作。重定向URL所在的服务器需要解析参数 `upload_return` 所携带的返回信息，进行进一步处理。 `upload_return` 参数值采用[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)。
+
+
+<a name="MagicVariables"></a>
+
+## 魔法变量（MagicVariables）
+
+魔法变量是七牛云存储同用户交换数据的机制，在 `returnBody` 和 `callbackBody` 中使用。实际上魔法变量是一种占位符，在 `returnBody` 和 `callbackBody` 中占据某一位置，引导七牛云存储构造出用户所需的反馈信息。
+
+魔法变量是一组规定的 API Call，可以使用 `$(APIName)` 或者是 `$(APIName.FieldName)` 的形式进行求值。
+
+目前可用的魔法变量如下:
+
+API 名称  | 子项 | 说明
+----------|------|-------------------------------------------
+etag      | 无   | 文件上传成功后的 etag，上传前不指定 key 时，etag 等同于缺省的 key
+fname     | 无   | 原始文件名
+fsize     | 无   | 文件大小，单位: Byte
+mimeType  | 无   | 文件的资源类型，比如 .jpg 图片的资源类型为 `image/jpg`
+imageInfo | 有   | 获取所上传图片的基本信息，支持访问子字段
+exif      | 有   | 获取所上传图片EXIF信息，支持访问子字段
+endUser   | 无   | 获取 uploadToken 中指定的 endUser 选项的值，即终端用户ID
+
+魔法变量支持同 [JSON](http://json.org/) 对象一样的 `<Object>.<Property>` 访问形式，比如：
+
+- <API名称>
+- <API名称>.<子项>
+- <API名称>.<子项>.<下一级子项>
+
+MagicVariables 求值示例：
+
+- `$(etag)` - 获取当前上传文件的 etag
+- `$(fname)` - 获取原始文件名
+- `$(fsize)` - 获取当前上传文件的大小
+- `$(mimeType)` - 获取当前上传文件的资源类型
+- `$(imageInfo)` -  获取当前上传图片的基本属性信息
+- `$(imageInfo.width)` - 获取当前上传图片的原始高度
+- `$(imageInfo.height)` - 获取当前上传图片的原始高度
+- `$(imageInfo.format)` -  获取当前上传图片的格式
+- `$(endUser)` - 获取 uploadToken 中指定的 endUser 选项的值，即终端用户ID
+
+imageInfo 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?imageInfo>
+
+- `$(exif)` - 获取当前上传图片的 EXIF 信息
+- `$(exif.ApertureValue)` - 获取当前上传图片所拍照时的光圈信息
+- `$(exif.ApertureValue.val)` - 获取当前上传图片拍照时的具体光圈值
+
+exif 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?exif>
+
+
+<a name="xVariables"></a>
+
+## 自定义变量（xVariables）
+
+自定义变量是七牛云存储提供的另一种信息交换机制，主要用于应用客户端和应用服务器之间的信息交换。可在 `returnBody` 和 `callbackBodk` 中使用。
+
+在重定向上传和回调上传中，七牛云存储帮助应用客户端将一些信息传递到服务端，减少两者之间的交互。服务端在构造 `returnBody` 和 `callbackBodk` 时，可以加入自定义变量。应用客户端则在上传请求中设定自定义变量的值。七牛云存储收到这些变量信息后，置换掉 `returnBody` 和 `callbackBodk` 中的自定义变量设置，形成最终的反馈结果。
+
+自定义变量的形式同魔法变量一样，只是变量名必须以 `x:` 开始。下面是一个自定义变量的案例：
+
+用户设置了如下的 `callbackBody` ：
+
+```
+  put_policy = '{
+    ...
+    "callbackBody" : "name=$(fname)&hash=$(etag)&location=$(x:location)&=$(x:prise)"
+    ...
+  }'
+```
+
+其中，$(x:location) 和 $(x:prise) 就是自定义变量。
+
+之后，用户构造了如下请求：
+
+```
+    <form method="post" action="http://up.qiniu.com/" enctype="multipart/form-data">
+      <input name="key" type="hidden" value="sunflower.jpg">
+      <input name="x:location" type="hidden" value="Shanghai">
+      <input name="x:prise" type="hidden" value="1500.00">
+      <input name="token" type="hidden" value="...">
+      <input name="file" type="file" />
+    </form>
+```
+
+文件上传完成后，七牛云存储会将请求中 `x:location` 和 `x:prise` 的值，替换 `callbackBody` 中的自定义变量：
+
+```
+  name=sunflower.jpg&hash=Fn6qeQi4VDLQ347NiRm-RlQx_4O2&location=Shanghai&prise=1500.00
+```
+
+然后，七牛云存储将此结果进行[URL安全的Base64编码](http://en.wikipedia.org/wiki/Base64)，作为回调请求的Body调用 `callbackUrl` 指定的回调服务器。
+
 
 
 <a name="do-upload"></a>
@@ -394,7 +540,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
 上图展示了普通客户端直传的基本流程。具体步骤说明如下：
 
 1. 应用客户端向应用服务器请求上传文件。通常，应用客户端需要向应用服务器发送 `资源名` ， `空间名` 和 `deadline` 等参数由应用服务器的业务逻辑确定；
-1. 应用服务器构造 `上传策略` 。应用服务器的业务逻辑需要设置 `redirectUrl` 字段；
+1. 应用服务器构造 `上传策略` 。应用服务器的业务逻辑需要设置 `returnUrl` 字段；
 1. 应用服务器将 `上传策略` 序列化成json格式，对其实施签名算法，得到 `上传凭证` ；
 1. 应用服务器将 `上传凭证` 返回给应用客户端；
 1. 应用客户端构造完整的上传请求；
@@ -422,295 +568,60 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
 1. 七牛云存储完成回调后，将获得的回调返回信息，原封不动地反馈给应用客户端。
 
 
-========================== 未完成分割线 ==========================
-
-
-**注意**
-
-- `Flags` 数据必须为标准的 [JSON](http://json.org/) 字符串
-- `Flags` 各字段里边的尖括号“`<Variable Type>`”内容表示要被替换掉的“变量”，“变量”的数据类型已在括号内指定
-- `urlsafe_base64_encode(string)` 函数按照标准的 [RFC 4648](http://www.ietf.org/rfc/rfc4648.txt) 实现，开发者可以参考 <https://github.com/qiniu> 上各SDK的样例代码。
-- `AccessKey:EncodedSign:EncodedFlags` 这里的冒号是字符串，仅作为连接分隔符使用，最终连接组合的 UploadToken 也是一个字符串（String）。
-- `callbackUrl` 与 `returnUrl` 不可同时指定，两者只可选其一。
-- `callbackBody` 与 `returnBody` 不可同时指定，两者只可选其一。
-
-
-<a name="uploadToken-args"></a>
-
-### 参数
-
-uploadToken 参数详解：
-
- 字段名       | 必须 | 说明
---------------|------|-----------------------------------------------------------------------
- scope        | 是   | 一般指文件要上传到的目标存储空间（Bucket）。若为"Bucket"，表示限定只能传到该Bucket（仅限于新增文件）；若为"Bucket:Key"，表示限定特定的文件，可修改该文件。
- deadline     | 否   | 定义 uploadToken 的失效时间，Unix时间戳，精确到秒，缺省为 3600 秒
- endUser      | 否   | 给上传的文件添加唯一属主标识，特殊场景下非常有用，比如根据终端用户标识给图片或视频打水印
- returnUrl    | 否   | 设置用于浏览器端文件上传成功后，浏览器执行301跳转的URL，一般为 HTML Form 上传时使用。文件上传成功后会跳转到 returnUrl?query_string, query_string 会包含 returnBody 内容。returnUrl 不可与 callbackUrl 同时使用。
- returnBody   | 否   | 文件上传成功后，自定义从 Qiniu-Cloud-Server 最终返回給终端 App-Client 的数据。支持 [魔法变量](#MagicVariables)，不可与 callbackBody 同时使用。
- callbackBody | 否   | 文件上传成功后，Qiniu-Cloud-Server 向 App-Server 发送POST请求的数据。支持 [魔法变量](#MagicVariables) 和 [自定义变量](#xVariables)，不可与 returnBody 同时使用。
- callbackUrl  | 否   | 文件上传成功后，Qiniu-Cloud-Server 向 App-Server 发送POST请求的URL，必须是公网上可以正常进行POST请求并能响应 HTTP Status 200 OK 的有效 URL 
- asyncOps     | 否   | 指定文件（图片/音频/视频）上传成功后异步地执行指定的预转操作。每个预转指令是一个API规格字符串，多个预转指令可以使用分号“;”隔开
-
-
-<a name="uploadToken-returnBody"></a>
-
-### 使用上传模型1，App-Client 接收来自 Qiniu-Cloud-Storage 的 Response Body
-
-如果开发者使用上传模型1，App-Client 上传一张图片到 Qiniu-Cloud-Storage 后，App-Client 想知道该图片的一些信息比如 Etag, EXIF 等信息，那么此时即可在 uploadToken 中使用 **`returnBody`** 参数。 
-
-App-Client 想求值得到的这些 Etag, EXIF 等信息我们称之为魔法变量（[MagicVariables](#MagicVariables)）。
-
-returnBody 赋值可以把 魔法变量（[MagicVariables](#MagicVariables)）的求值结果以 `Content-Type: application/json` 形式返回給 App-Client。
-
-一个典型的包含 MagicVariables 的 returnBody 字段声明如下（returnBody 必须是一个JSON字符串）：
-
-    Flags["returnBody"] = `{
-        "foo": "bar",
-        "name": $(fname),
-        "size": $(fsize),
-        "type": $(mimeType),
-        "hash": $(etag),
-        "w": $(imageInfo.width),
-        "h": $(imageInfo.height),
-        "color": $(exif.ColorSpace.val)
-    }`
-
-假使如上，当一个用户在 iOS 端用包含该 returnBody 字段的 uploadToken 成功上传一张图片，那么该 iOS 端程序将收到如下一段 HTTP Response 应答：
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-    Cache-Control: no-store
-    Response Body: {
-        "foo": "bar",
-        "name": "gogopher.jpg",
-        "size": 214513,
-        "type": "image/jpg",
-        "hash": "Fh8xVqod2MQ1mocfI4S4KpRL6D98",
-        "w": 640,
-        "h": 480,
-        "color": "sRGB"
-    }
-
-可用的魔法变量列表参考：[MagicVariables](#MagicVariables)
-
-### HTML Form 上传后跳转
-
-若在 uploadToken 中指定了 `returnUrl` 和 `returnBody` 选项，且文件上传成功，Qiniu-Cloud-Storage 会返回如下应答：
-
-    HTTP/1.1 301 Moved Permanently
-    Location: returnUrl?upload_ret={returnBodyEncoded}
-
-即跳转到指定的 `returnUrl` 并附带上经过 `urlsafe_base64_encode()` 编码过的 `returnBody` 。 `urlsafe_base64_encode(string)` 函数按照标准的 [RFC 4648](http://www.ietf.org/rfc/rfc4648.txt) 实现，开发者可以参考 <https://github.com/qiniu> 上各SDK的样例代码。可以通过逆向还原 `returnBody` 。
-
-若上传失败，且上传失败的原因不是由于 uploadToken 无效造成的，Qiniu-Cloud-Storage 会返回如下应答：
-
-    HTTP/1.1 301 Moved Permanently
-    Location: returnUrl?code={error_code}&error={error_message}
-
-
-<a name="upload-with-callback-appserver"></a>
-
-### 使用上传模型2，App-Client 接收来自 App-Server 的 Response Body
-
-如果开发者使用了上传模型2，在 uploadToken 中指定了 `callbackUrl` 和 `callbackBody` 选项。App-Client 使用该 uploadToken 将文件上传成功后，Qiniu-Cloud-Storage 会向指定的 `callbackUrl` 以 HTTP POST 方式将 `callbackBody` 的值以 `application/x-www-form-urlencoded` 的形式发送给 App-Server。App-Server 接收请求后，返回 `Content-Type: "application/json"` 形式的 Response Body, 该段 JSON 数据会原封不动地经由 Qiniu-Cloud-Storage 返回给 App-Client 。
-
-**callbackUrl** 必须是公网上可以公开访问的 URL  
-
-**callbackUrl** 若指定，**callbackBody** 也必须指定，且两者的值都不能为空  
-
-**callbackBody** 必须是 `a=1&b=2&c=3` 这种形式的字符串。当包含 [魔法变量](#MagicVariables) 时，可以是这样一种形式：`a=1&key=$(etag)&size=$(fsize)&uid=$(endUser)` 。当包含 [自定义变量](#xVariables) 时，可以是这样一种形式：`test=$(x:test)&key=$(etag)&size=$(fsize)&uid=$(endUser)`，其中 `x:test` 是一个自定义变量。自定义变量命名必须以 `x:` 开头，且在 `multipart/form-data` 上传流中存在。
-
-Qiniu-Cloud-Storage 回调 App-Server 成功后，App-Server 必须返回如下格式的 Response:
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-    Cache-Control: no-store
-    Response Body: {
-        "foo": "bar",
-        "name": "gogopher.jpg",
-        "size": 214513,
-        "type": "image/jpg",
-        "w": 640,
-        "h": 480
-    }
-
-其中，Response Body 部分 App-Server 随意，只需为标准的 [JSON](http://json.org) 格式即可。
-
-参考：
-
-- [魔法变量 - MagicVariables](#MagicVariables)
-- [自定义变量 - xVariables](#xVariables)
-
-### callback 失败处理
-
-如果文件上传成功，但是 Qiniu-Cloud-Storage 回调 App-Server 失败，Qiniu-Cloud-Storage 会将回调失败的信息连同 `callbackBody` 数据本身返回给 App-Client, App-Client 可选自定义策略进行相应的处理。
-
 <a name="uploadToken-asyncOps"></a>
 
-### 音视频上传预转 - asyncOps
+## 上传中的云处理（Async-Ops）
 
-七牛云存储的云处理API（图像/音视频在线处理）满足如下规格:
+七牛云存储提供一系列[云处理（fop）]()操作，用于对存放在七牛云存储的资源进行再处理。有时用户需要上传一个文件，然后随即对其进行某种处理。一个典型的例子就是：用户上传了一张图片，然后立刻生成几个不同格式的缩略图，用于不同的客户端。通常，用户可以上传完成之后，调用云处理功能，执行对资源的处理。但七牛云存储提供了更简洁的方式，允许在一次上传中，指定上传完成后对资源进行云处理操作。
 
-    url?<fop>
+用户只需在构造 `上传策略` 时，设置 `asyncOps` 参数，即可触发附加的云处理。正如该参数名称所指，附加的云处理是异步执行，即资源上传操作完成后，七牛云存储会触发云处理，但不等处理完成，便返回上传请求的响应。七牛云存储的云处理系统会继续完成相应的操作。
 
-即基于文件的 URL 通过问号传参来实现即时云处理，`<fop>` 表示 API 指令及其所需要的参数，是 File Operation 概念的缩写。
+`asyncOps` 参数的格式如下：
 
-例如,
-
-- [http://apitest.b1.qiniudn.com/sample.wav?avthumb/mp3/ar/44100/aq/3](http://apitest.b1.qiniudn.com/sample.wav?avthumb/mp3/ar/44100/aq/3)
-
-其中,
-
-- `url = http://apitest.b1.qiniudn.com/sample.wav`
-- `fop = avthumb/mp3/ar/44100/aq/3`
-
-表示将原 wav 格式的音频转换为 mp3 格式，并指定动态码率（VBR）参数为3，采样频率为 44100 进行输出。
-
-由于音视频文件一般都比较大，转换也是一个比较耗时的操作，故七牛云存储提供上传异步预转功能，即文件上传完毕后执行异步转换处理，这样在访问时即可获取到已经转换好了的目标文件。
-
-可以在上传时候指定预转选项，只需在生成 uploadToken 时对 **asyncOps** 赋值相应的 `<fop>` 指令即可。可同时异步执行多个预转指令：
-
+```
     asyncOps = <fop>[;<fop2>;<fop3>;…;<fopN>]
+```
 
-**asyncOps** 预转示例参见如下说明。
+其中， `<fop>` 是云处理的指令。用户可以一次设置多个云处理指令，在一次上传中执行多种资源的操作。云处理指令间以“;”分割。关于云处理指令，详见[云处理参考]()。
 
-**上传**
+下面以一个音频文件为例，演示如何在上传中实现云处理。
 
-1. 设定 `asyncOps = "avthumb/mp3/ar/44100/ab/32k;avthumb/mp3/aq/6/ar/16000"`
-2. 以此生成带有预转功能的上传授权凭证（UploadToken）
-3. 向七牛云存储上传一个 aac 格式的音频文件
-4. 传成功后，服务器会对这个 aac 音频文件异步地做如下两个预转操作
-    - `avthumb/mp3/ar/44100/ab/32k`
-    - `avthumb/mp3/aq/6/ar/16000`
+假设需要向空间 `apitest.b1` 上传一个名为 `sample.wav` ，并将其转换成两种不同规格的 `mp3` 文件。
 
-**下载**
+首先，用户需要根据规格要求确定云处理指令：
 
-可以通过 `http://<domain>/<key>` 的形式下载：
+- 规格1：`avthumb/mp3/ar/44100/ab/32k`。将生成采样率为44k，码率为32k的mp3音频。
+- 规格2：`avthumb/mp3/aq/6/ar/16000`。将生成质量为6，码率为16000的mp3音频
 
-- `http://<bucket>.qiniudn.com/<key>?avthunm/mp3/ar/44100/ab/32k`
-- `http://<bucket>.qiniudn.com/<key>?avthumb/mp3/aq/6/ar/16000`
+然后，用户在构造 `上传策略` 的时候，将云处理指令放入 `asyncOp` 参数中：
 
-如果有为 `<fop>` 定义 `<style>`, 那么也可以用友好URL风格进行访问。
+```
+  put_policy = '{
+    "scope" : "apitest.b1:sample.wave",
+    "deadline" : 1451491200,
+      ...
+    "asyncOps" : "avthumb/mp3/ar/44100/ab/32k;avthumb/mp3/aq/6/ar/16000"
+  }'
 
-我们先来熟悉 [qboxrsctl](/tools/qboxrsctl.html) 的两个命令行，
+最后，用户构造资源上传请求，上传文件。
 
-    // 定义 url 和 fop 之间的分隔符为 separator 
-    qboxrsctl separator <bucket> <separator>
+上传完成后，用户可以通过标准的云处理方式访问： `http://<domain>/<key>?<fop>` 。这里的 `<fop>` 是在 `asyncOps` 中设定的云处理指令中的任何一个。比如，如果要获取规格1的转换结果，只需使用以下的URL即可：
 
-    // 定义 fop 的别名为 aliasName
-    qboxrsctl style <bucket> <aliasName> <fop>
+```
+  [http://apitest.b1.qiniudn.com/sample.wav?avthumb/mp3/ar/44100/ab/32k](http://apitest.b1.qiniudn.com/sample.wav?avthumb/mp3/ar/44100/ab/32k)
+```
 
-例如:
-
-    qboxrsctl separator <bucket> "."
-    qboxrsctl style <bucket> "mp3" "avthumb/mp3/aq/6/ar/16000"
-
-那么，以下两个 URL 则等价:
-
-- `http://<bucket>.qiniudn.com/<key>?avthumb/mp3/aq/6/ar/16000`
-- `http://<bucket>.qiniudn.com/<key>.mp3`
+具体的云处理访问详见[云处理参考]()
 
 
-访问以上链接，如果之前上传已经成功做完预转，那么此次请求就不需要再转换，将会直接下载预转后的结果文件。
+<a name="appendix"></a>
 
-图片、视频预转类似，开发者需要熟悉七牛云存储的更多 `<fop>` 指令，参考:
-
-- [图像处理接口](/api/image-process.html)
-- [音频/视频/流媒体处理](/api/audio-video-hls-process.html) 
-
-
-<a name="uploadToken-examples"></a>
-
-### 生成 uploadToken 的样例代码
-
-生成 uploadToken 的样例代码可以参考: 
-
-- C - <https://github.com/qiniu/c-sdk/blob/develop/qiniu/rs.c>
-- Go - <https://github.com/qiniu/api/blob/develop/rs/token.go>
-
-
-<a name="dictionary"></a>
-
-## 附录
-
-<a name="MagicVariables"></a>
-
-### 魔法变量 - MagicVariables
-
-文件上传成功后，Qiniu-Cloud-Storage 返回给 App-Client 的 Response Body 可以包含该文件的一些属性信息，这些属性信息通常需要上传成功后询问 Qiniu-Cloud-Storage 得知，然后作为 Response Body 的一部分返回给 App-Client。
-
-例如 App-Client 成功上传一张图片到 Qiniu-Cloud-Storage，App-Client 想知道该图片的一些信息像是 Etag, EXIF 等信息，App-Client 想求值得到的这些 Etag, EXIF 等信息我们可以通过魔法变量（MagicVariables）的方式获取。 
-
-MagicVariables 是一组规定的 API Call，可以使用 `$(APIName)` 或者是 `$(APIName.FieldName)` 的形式进行求值。主要用在 [uploadToken 的 returnBody 选项](#uploadToken-returnBody) 中。
-
-可用 MagicVariables 列表:
-
-API 名称  | 子项 | 说明
-----------|------|-------------------------------------------
-etag      | 无   | 文件上传成功后的 etag，上传前不指定 key 时，etag 等同于缺省的 key
-fname     | 无   | 原始文件名
-fsize     | 无   | 文件大小，单位: Byte
-mimeType  | 无   | 文件的资源类型，比如 .jpg 图片的资源类型为 `image/jpg`
-imageInfo | 有   | 获取所上传图片的基本信息，支持访问子字段
-exif      | 有   | 获取所上传图片EXIF信息，支持访问子字段
-endUser   | 无   | 获取 uploadToken 中指定的 endUser 选项的值，即终端用户ID
-
-MagicVariables 支持同 [JSON](http://json.org/) 对象一样的 `{Object}.{Property}` 访问形式，比如：
-
-- {API名称}
-- {API名称}.{子项}
-- {API名称}.{子项}.{下一级子项}
-
-其中花括号部分（“`{…}`”）实际情况下需要用具体的 API 及其子项代替。
-
-MagicVariables 求值示例：
-
-- `$(etag)` - 获取当前上传文件的 etag
-- `$(fname)` - 获取原始文件名
-- `$(fsize)` - 获取当前上传文件的大小
-- `$(mimeType)` - 获取当前上传文件的资源类型
-- `$(imageInfo)` -  获取当前上传图片的基本属性信息
-- `$(imageInfo.width)` - 获取当前上传图片的原始高度
-- `$(imageInfo.height)` - 获取当前上传图片的原始高度
-- `$(imageInfo.format)` -  获取当前上传图片的格式
-- `$(endUser)` - 获取 uploadToken 中指定的 endUser 选项的值，即终端用户ID
-
-imageInfo 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?imageInfo>
-
-- `$(exif)` - 获取当前上传图片的 EXIF 信息
-- `$(exif.ApertureValue)` - 获取当前上传图片所拍照时的光圈信息
-- `$(exif.ApertureValue.val)` - 获取当前上传图片拍照时的具体光圈值
-
-exif 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogopher.jpg?exif>
-
-
-<a name="xVariables"></a>
-
-### 自定义变量 - xVariables
-
-已知 [上传API](#upload-api) 结构如下
-
-HTML Form API
-
-    <form method="post" action="http://up.qiniu.com/" enctype="multipart/form-data">
-      <input name="key" type="hidden" value="{FileID}">
-      <input name="x:custom_field_name" type="hidden" value="{SomeVal}">
-      <input name="token" type="hidden" value="{UploadToken}">
-      <input name="file" type="file" />
-    </form>
-
-自定义变量即是其中的 `x:custom_field_name`，Qiniu-Cloud-Storage 允许在 form 或 `multipart/form-data` 流中添加任意以 `x:` 开头的自定义字段，不限个数，例如：
-
-	<input name="x:uid" value="xxx">
-	<input name="x:album_id" value="yyy">
-
-这样，开发者在 uploadToken 的 `callbackBody` 选项里面就可以通过 `$(x:album_id)` 引用此自定义字段的值。例如此时 `callbackBody` 可以设置为 `key=$(etag)&album=$(x:album_id)&uid=$(x:uid)`，App-Server 通过此设置即可得到 App-Client 端文件上传成功后附带的自定义变量的值。
+# 附录
 
 
 <a name="error-code"></a>
 
-### 错误码
+## 错误码
 
 HTTP 状态码 | 错误说明
 ------------|-----------------------------------------------------------------
