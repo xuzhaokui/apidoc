@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "下载接口"
+title: "资源下载"
 ---
 
 - [公有资源下载](#public-download)
@@ -11,33 +11,58 @@ title: "下载接口"
 - [自定义 404 Not Found](#define-404-not-found)
 - [自定义资源下载时所保存的名称](#define-download-friendly-name)
 
-<a name="public-download"></a>
 
+用户在七牛云存储的[空间]()有两种保护状态：公开（public）和私有（private）。当用户下载资源的时候，需要对这两种状态采用不同的访问方式。公开资源可以使用[资源名]()和空间名构造出URL，直接下载，无需签名授权。私有资源则需要用户对资源访问URL做认证签名，向资源下载方授权。
+
+另外，七牛云存储的空间还可以设置成为[原图保护]()。在这种特殊的模式下，空间内保存的“原图”（即用户上传的原始资源），需要像私有资源那样受权访问。而这些“原图”通过云处理生成的派生资源，可以如同公开资源那样直接访问，无需授权。
+
+
+<a name="download-proto"></a>
+
+## 下载协议
+
+七牛云存储的资源下载采用 `HTTP GET` 实现。下载所需的参数都放置在URL的[Query String]()里：
+
+```
+  http://<domain>/<key>?<param1>=<value1>&<param2>=<value2>...
+```
+
+七牛云存储支持断点续下载，用户可以通过标准的HTTP头 `Range` 指定下载范围：
+
+```
+  Range: bytes=<first-byte-pos>-<last-byte-pos>
+```
+
+详见[RFC2616 标准](<http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35>)。
+
+<a name="download-response"></a>
+
+## 下载反馈
+
+资源下载启动后，如果一切正常，HTTP Response将反馈 `HTTP 2XX` 系列状态码，并携带数据返回客户端。
+
+如果发生错误，HTTP Response将反馈相应的错误状态码，并在Response Body中携带具体的错误信息。
+
+除资源数据，或错误信息外，资源下载的反馈还会携带一些Header，包括：`Content-Type`、`Content-Length`、`ETag`、`X-Log`、`X-Reqid` 等。其中，`X-Reqid` 是下载请求的唯一标识，通过它可以追踪整个请求的执行过程，帮助用户排查问题。 `X-Log` 是用户请求的缩略日志，可用于快速定位问题。
+
+<a name="public-download"></a>
 
 ## 公有资源下载
 
-**格式**
+公有资源下载非常简单，直接通过资源URL便可完成。
 
-    [GET] http://<bucket>.qiniudn.com/<key>
+用户存放在七牛云存储的资源都可以由一个URL唯一标识。这个URL构成如下：
 
-**或者**
+```
+  http://<domain>/<key>
+```
 
-    [GET] http://<domain>/<key>
+`<domain>` 有两种形态：七牛二级域名和用户自定义域名。
 
-**或者**
+七牛二级域名是一个空间默认的域名，格式为：`<bucket>.qiniudn.com` 。 `<bucket>` 为空间名。比如，名为 `my-bucket` 空间，其域名为： `my-bucket.qiniudn.com` 。用户可以通过 `http://my-bucket.qiniu.com/sunflower.jpg` 下载名为 `sunflower.jpg` 的资源。
 
-    [GET] http://<domain>/<key>?<fop>/<params>
+用户可以将一个自己的域名[绑定到一个空间]()，一旦绑定成功，便可以通过这个域名访问空间内的资源。比如，用户将 `www.my-blog-base.com` 同 `my-bucket` 空间绑定，之后便可以通过此域名访问： `http://www.my-blog-base.com/sunflower.jpg` 。
 
-Qiniu-Cloud-Storage 的云处理（图片/音频/视频）API 满足 `url?<fop>/<params>` 这种格式，`<fop>` 表示具体的云处理指令，例如：`url?imageView/1/w/480/h/320` 表示一个缩略图预览的URL，其中 `imageView` 是具体的 `<fop>`, `1/w/480/h/320` 是该 fop 的 `<params>`。
-
-
-**参数**
-
-名称   | 说明
--------|---------------------------------------------------
-bucket | 空间名称
-key    | 上传时 App-Client 端指定的文件ID，在指定空间内唯一
-domain | bucket 绑定的自定义域名
 
 **流程**
 
