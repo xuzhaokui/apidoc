@@ -602,6 +602,7 @@ exif 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogo
       ...
     "asyncOps" : "avthumb/mp3/ar/44100/ab/32k;avthumb/mp3/aq/6/ar/16000"
   }'
+```
 
 最后，用户构造资源上传请求，上传文件。
 
