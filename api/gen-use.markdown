@@ -302,3 +302,113 @@ Client。
 <a name="fop"></a>
 
 ## 云处理
+
+七牛云存储不仅仅提供优质的数据存储服务，还提供了多种让用户直接对存储的数据进行云端处理的能力，包括：
+
+1. [图片处理](#image-process)
+2. [音视频处理](#vedio-process)
+3. [文档转换](#doc-process)
+4. [管道](#pipeline)
+5. [杂项](#misc)
+6. [友好别名访问](#style)
+
+<a name="image-process"></a>
+
+#### 图片处理
+
+常规的图片处理通常放在企业的客户端或服务器端来操作，对接上七牛云存储的图像处理接口后，即可使用丰富的在线云端图片处理服务，大大减少企业带宽消耗，提高开发效率。
+
+七牛云存储提供强大的图片处理能力，包含丰富的图片处理功能：
+
+1. [获取图片基本信息](/api/v6/image-process.html#imageInfo)
+2. [获取图片EXIF信息](/api/v6/image-process.html#imageExif)
+3. [生成指定规格的缩略图](/api/v6/image-process.html#imageView)
+4. [高级图像处理接口（缩略、裁剪、旋转、转化）](/api/v6/image-process.html#imageMogr)
+5. [图像水印接口](/api/v6/image-process.html#watermark)
+
+例如，这里以 <http://qiniuphotos.qiniudn.com/gogopher.jpg> 作为原图，利用图片处理服务，可以轻松地做到：
+
+1. <http://qiniuphotos.qiniudn.com/gogopher.jpg?imageInfo> （点击可查看图片基本信息）
+2. <http://qiniuphotos.qiniudn.com/gogopher.jpg?exif> （点击可查看图片EXIF信息。如果是浏览器查看，请设置浏览器编码为utf-8，否则可能出现乱码）
+3. <http://qiniuphotos.qiniudn.com/gogopher.jpg?imageView/1/w/200/h/200/q/80/format/png> （点击可查看长宽均为200、质量为原图80%、并被转为png格式的缩略图）
+
+当然还有更复杂高级的功能，比如首先在原图基础上生成一张质量为原图80%的缩略图，随后对这张缩略图进行裁剪，再对裁剪后的小图进行顺时针旋转45度：
+
+<http://qiniuphotos.qiniudn.com/gogopher.jpg?imageMogr/thumbnail/!80p/crop/!200x200a150a50/rotate/45>（点击查看处理后图片）
+
+除此之外，给一张图片打上水印也是很容易，比如：
+
+**文字水印** (右键获得图片链接可查看水印生成的具体规格参数)
+
+![文字水印实例](http://qiniuphotos.qiniudn.com/gogopher.jpg?watermark/2/text/5LiD54mb5LqR5a2Y5YKo/font/5a6L5L2T/fontsize/1000/fill/d2hpdGU=/dissolve/85/gravity/SouthEast/dx/20/dy/20)
+
+
+**图片水印** (右键获得图片链接可查看水印生成的具体规格参数)
+
+![图片水印实例](http://qiniuphotos.qiniudn.com/gogopher.jpg?watermark/1/image/aHR0cDovL3d3dy5iMS5xaW5pdWRuLmNvbS9pbWFnZXMvbG9nby0yLnBuZw==/dissolve/50/gravity/SouthEast/dx/20/dy/20)
+
+
+这里只是少量的示范，关于图片处理接口详细的说明和使用方法请参考这里：[图片处理API文档](/api/v6/image-process)
+
+
+<a name="vedio-process"></a>
+
+#### 音视频/流媒体在线处理
+
+七牛云存储国内首创了在线音视频/流媒体处理服务，并提供优质的音视频分发网络。
+
+七牛音视频/流媒体处理支持：
+
+1. [音频转换](/api/v6/audio-vedio-hls-process.html#audio-convert)
+2. [视频转换](/api/v6/audio-vedio-hls-process.html#vedio-convert)
+3. [视频帧缩略图](/api/v6/audio-vedio-hls-process.html#vedio-thumbnail)
+4. [HTTP Live Streaming](/api/v6/audio-vedio-hls-process.html#hls)
+
+
+例如：
+
+1. <http://apitest.qiniudn.com/sample.wav?avthumb/mp3/ar/44100/aq/3> （将 wav 音频格式转换为 mp3 格式，并指定 VBR 参数为3，采样频率为 44100，点击试听转换后的音频）
+2. <http://open.qiniudn.com/thinking-in-go.mp4?avthumb/avi/ab/64k/acodec/libmp3lame> （将 mp4 视频格式转换为 avi 格式，使用 mp3 进行音频编码，且音频比特率为64k）
+3. <http://open.qiniudn.com/thinking-in-go.mp4?vframe/jpg/offset/7/w/480/h/360> （取视频第 7 秒的截图，图片格式为 jpg，宽度为 480px，高度为 360px，点击查看视频帧）
+
+同样，这里只是一小部分功能的实例，更多参数和详细的接口说明，请参考：[音视频/流媒体在线处理API文档](/api/v6/audio-vedio-hls-process.html)
+
+<a name="doc-process"></a>
+
+#### 文档转换
+
+除了富媒体之外，七牛云存储还提供对特定文档的处理能力，目前提供的是Markdown到HTML文本的转换。
+
+具体使用方法和参数请参考：[Markdown转HTML](http://lalalala.qiniudn.com/api/v6/office-process.html)
+
+<a name="pipeline"></a>
+
+#### 管道处理
+
+什么是管道处理？即一种能够将各种处理功能串联起来形成一种管道操作的能力。这种管道处理的方式使得对一个文件的处理方式不再受限于每个单一文件处理功能。
+
+比如：
+
+1. 从视频中提取某一帧生成缩略图
+2. 从该缩略图中截取出部分面积的小图
+3. 然后基于截取后的图片打水印
+
+如果没有管道处理能力，那么上面三个步骤就只能分开多次操作才能得到最后打好水印的图片。但是管道处理可以让用户仅仅访问那一次就能处理完所有的操作。
+
+具体使用方式详见：[数据处理(管道篇)](/api/v6/pipeline.html)
+
+<a name="misc"></a>
+
+#### 杂项
+
+七牛云存储的云端处理具有良好的扩展能力，能够方便地添加各种文件处理功能，因此除了以上比较系统的文件处理功能之外，七牛云存储还提供一些比较实用的功能，比如[在线生成QR code](/api/v6/misc-file-process.html)。
+
+<a name="style"></a>
+
+#### 友好别名访问
+
+如果您觉得您使用的文件处理命令过冗长和复杂，我们提供了别名映射的功能，可以为一个特定的处理命令起一个友好的`别名`，之后的文件处理命令都可以用这个`别名`进行替换，从而使图片的 URL 变得更加简洁和友好。
+
+比如，您可以为命令`thumbnail/!80p/crop/!200x200a150a50/rotate/45`起一个别名叫做`mystyle`，之后就可以使用别名`mystyle`替换原来那个冗长的命令了。
+
+详细的使用方法请参考相关说明：[友好别名访问](/api/v6/pipeline.html)
