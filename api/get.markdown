@@ -142,6 +142,12 @@ title: "资源下载"
 
 七牛云存储收到此请求后，会从URL中分离出 `token` ，对其余部分执行签名算法，以验证URL的合法性。同时，七牛云存储还将验证URL是否过期。
 
+**注意：** `token` 应当位于整个URL的最后，作为最后一个参数。
+
+
+
+<a name="private-download-proc"></a>
+
 **流程**
 
 ![私有资源下载](img/private-download.png)
@@ -161,26 +167,18 @@ title: "资源下载"
 
 七牛云存储支持自定义 404 Not Found 处理，当一个资源不存在，可以让该请求命中一个缺省的资源。该资源可以是一张图片，也可以是一段HTML等。
 
-要实现自定义 404 Not Found，只需向指定的 bucket (存储空间) 上传一个 key (FileID) 为 `errno-404` 的文件即可。
+要实现自定义 404 Not Found，只需向指定的 bucket (存储空间) 上传一个 key 为 `errno-404` 的文件即可。
+
 
 
 <a name="define-download-friendly-name"></a>
 
 ## 自定义资源下载时所保存的名称
 
-    [GET] url?download/<saveAsFriendlyName>
+    [GET] url?download/<file name>
 
-如上 API 规格，`download` 是一个 `fop` 指令，`<saveAsFriendlyName>` 是该 fop 指令的参数，表示下载资源保存在本地的文件名称，一般建议带上文件后缀。
+如上 API 规格，`download` 是一个指令，通知七牛云存储资源下载时，触发浏览器进行文件下载，而不是作为页面展示。`<file name>` 是该 fop 指令的参数，表示下载资源保存在本地的文件名称。
 
-公有资源下载
+当收到此指令时，七牛云存储会在反馈中增加一个 `Content-Disposition: attachment;filename="<file name>"` Header。此Header将促使浏览器对资源进行下载。下面的例子演示了 `download` 指令的使用：
 
-    [GET] http://<domain>/<key>?download/<saveAsFriendlyName>
-
-私有资源下载
-
-    [GET] http://<domain>/<key>?download/<saveAsFriendlyName>&e=<deadline>&token=<downloadToken>
-
-**示例**
-
-- <http://qiniuphotos.qiniudn.com/gogopher.jpg?download/test.jpg>
-
+  [http://qiniuphotos.qiniudn.com/gogopher.jpg?download/test.jpg](http://qiniuphotos.qiniudn.com/gogopher.jpg?download/test.jpg)
