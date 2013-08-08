@@ -45,11 +45,12 @@ title: "资源下载"
 
 除资源数据，或错误信息外，资源下载的反馈还会携带一些Header，包括：`Content-Type`、`Content-Length`、`ETag`、`X-Log`、`X-Reqid` 等。其中，`X-Reqid` 是下载请求的唯一标识，通过它可以追踪整个请求的执行过程，帮助用户排查问题。 `X-Log` 是用户请求的缩略日志，可用于快速定位问题。
 
+
 <a name="public-download"></a>
 
 ## 公有资源下载
 
-公有资源下载非常简单，直接通过资源URL便可完成。
+公有资源下载非常简单，直接通过 "GET" 资源URL便可完成。
 
 用户存放在七牛云存储的资源都可以由一个URL唯一标识。这个URL构成如下：
 
@@ -66,169 +67,92 @@ title: "资源下载"
 
 **流程**
 
-              *************
-          ****             ****
-        **                     **
-      **                         **
-      *    Qiniu-Cloud-Storage    *
-      **                         **
-        **                     **
-          ****             ****
-              *************
-                  ^  |
-                  |  |
-                  |  |
-      (1) Request |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  |
-                  |  | (2) Response
-                  |  |
-                  |  |
-                  |  v
-       +-------------------------+
-       |                         |
-       |                         |
-       |                         |
-       |        App-Client       |
-       |(Web/iOS/Android/etc,...)|
-       |                         |
-       |                         |
-       |                         |
-       +-------------------------+
+下图展示了公有资源下载的基本流程
 
-1. App-Client 访问文件 URL 请求下载资源
-2. Qiniu-Cloud-Storage 响应 App-Client, 命令距离 App-Client 物理距离最近的 IO 节点输出文件内容
-3. Response 过程中支持 [断点续下载](#download-by-range)
+![公开资源下载](img/public-download.png)
+
+流程说明：
+
+1. 应用客户端构造资源的URL
+1. 应用客户端向七牛云存储发送下载请求（HTTP GET）
+1. 七牛云存储向应用客户端反馈结果。如果发生错误，则反馈相应的 [HTTP 状态码]()
 
 
 <a name="private-download"></a>
 
 ## 私有资源下载
 
+当用户将空间设置成[私有]()后，所有对空间内资源的访问都必须获得授权。
 
-**格式**
+私有资源下载也是通过一个URL完成。与公有资源下载不同的是，URL中增加了 `e` 和 `token` 两个参数，分别用于放置URL的过期时间和[下载凭证（Download Token）]()：
 
-    [GET] http://<bucket>.qiniudn.com/<key>?e=<deadline>&token=<downloadToken>
+```
+  http://<domain>/<key>?e=<deadline>&token=<downloadToken>
+```
 
-**或者**
+实际上，私有资源下载使用的URL就是在公有资源下载URL后加上 `e` 和 `token` 两个参数。
 
-    [GET] http://<domain>/<key>?e=<deadline>&token=<downloadToken>
+参数 `e` 表示URL的过期时间，采用[Unix时间](http://en.wikipedia.org/wiki/Unix_time)。当此参数指定的时间一过，URL随即失效，七牛云存储将视此URL为无效请求，任何人都无法凭此URL访问所指的资源。需要注意的是，如果发起请求的应用客户端，或应用服务器的时钟偏离标准Unix时间，那么可能会造成URL尚未使用便已过期。所以， **应用客户端或应用服务器的时钟应当同Unix时间校准**
 
-**或者**
-
-    [GET] http://<domain>/<key>?<fop>/<params>&e=<deadline>&token=<downloadToken>
-
-
-**参数**
-
-名称          | 说明
---------------|-------------------------------------------------------------------------------------------------------------
-bucket        | 空间名称
-key           | 上传时 App-Client 端指定的文件ID，在指定空间内唯一
-domain        | bucket 绑定的自定义域名
-deadline      | 失效期，标准的Unix timestamp形式，从1970年1月1日（UTC/GMT的午夜）开始到失效期所经过的秒数，过了这个时间点之后，后续请求无效
-downloadToken | 下载授权凭证，由 App-Server 根据 [downloadToken 签名算法](#download-token-algorithm) 生成并颁发给 App-Client
-
-**流程**
-
-                                         *************
-                                     ****             ****
-                                   **                     **
-                                 **                         **
-                                 *    Qiniu-Cloud-Storage    *
-                                 **                         **
-                                   **                     **
-                                 ^   ****             ****
-                                /   /    *************
-                               /   /
-                              /   /
-        (3) Request Download /   /
-                            /   /
-                           /   /
-                          /   /
-                         /   /  (4) Return Result
-                        /   /
-                       /   /
-                      /   /
-                     /   /
-                    /   /
-                   /   /
-                  /   /
-                 /   /
-                /   v
-        +------------------+                                        +------------------+
-        |                  |                                        |                  |
-        |                  |    (1) Request (can be once)           |                  |
-        |                  |--------------------------------------->|                  |
-        |    App-Client    |                                        |    App-Server    |
-        |                  |<---------------------------------------|                  |
-        |                  |    (2) Return DownloadToken            |                  |
-        |                  |                                        |                  |
-        +------------------+                                        +------------------+
-
-1. App-Client 向 App-Server 请求下载授权
-2. App-Server 根据 [downloadToken 签名算法](#download-token-algorithm) 生成 downloadToken, 并颁发给 App-Client
-3. App-Client 拿到 downloadToken 后，向 Qiniu-Cloud-Storage 请求下载文件
-4. Qiniu-Cloud-Storage 在校验 downloadToken 成功后，输出文件内容。如果校验失败，返错误信息（401 bad token）
-5. Qiniu-Cloud-Storage 输出文件内容过程中支持 [断点续下载](#download-by-range)
+参数 `token` 携带下载凭证。下载凭证是对资源的授权，通过对请求的签名，确保下载请求是获得资源所有者的合法授权的。
 
 
 <a name="download-token"></a>
 
-## 下载授权凭证 - downloadToken
+**下载凭证**
 
-针对私有资源访问/下载，必须提供有效的 downloadToken，downloadToken 可以控制
-URL 的有效期。
+下载凭证是对下载URL中，除 `token` 参数以外的部分的加密签名。整个过程并不复杂：
 
-<a name="download-token-algorithm"></a>
+1. 构造出资源的URL：
 
-### 算法
+    ```
+      http://my-bucket.qiniu.com/sunflower.jpg
+    ```
 
-downloadToken 算法如下：
+1. 然后，加上URL的过期时间：
 
-    // 步骤1：生成不带 token 的下载 URL
-    url = http://<domain>/<key>?e=<deadline>
+    ```
+      http://my-bucket.qiniu.com/sunflower.jpg?e=1451491200
+    ```
 
-    // 或者附加 fop 指令的下载 URL
-    url = http://<domain>/<key>?<fop>/<params>&e=<deadline>
+1. 然后，对所得的URL进行HMAC-SHA1的加密，密钥是用户的SecretKey，并做[URL安全的Base64编码]()：
 
-    // 步骤2：将 URL 混入 SecretKey 进行数字签名
-    Signature = hmac_sha1(url, SecretKey)
+    ```
+      urlsafe_base64_encode(hmac_sha1(
+        secret_key, 
+        "http://my-bucket.qiniu.com/sunflower.jpg?e=1451491200"
+      ))
 
-    // 步骤3：将签名摘要值进行安全编码
-    EncodedSign = urlsafe_base64_encode(Signature)
+      得到
 
-    // 步骤4：连接各字符串，生成下载授权凭证
-    downloadToken = AccessKey:EncodedSign
+      HbAKtTogKqDLWEkq7zVSX6T35NI=
+    ```
 
-**注意**
+1. 最后，将生成的签名串同AccessKey按照 `<AccessKey>:<SignedString>` 的格式连接起来最终得到下载凭证：
 
-- `urlsafe_base64_encode()` 函数按照标准的 [RFC 4648](http://www.ietf.org/rfc/rfc4648.txt) 实现，开发者可以参考 [github.com/qiniu](https://github.com/qiniu) 上各SDK的样例代码。
-- `AccessKey:EncodedSign` 这里的冒号是字符串，仅作为连接分隔符使用，最终连接组合的 downloadToken 也是一个字符串（String）。
+    ```
+      j6XaEDm5DwWvn0H9TTJs9MugjunHK8Cwo3luCglo:HbAKtTogKqDLWEkq7zVSX6T35NI=
+    ```
 
+在下载资源时，把下载凭证作为 `token` 参数追加至URL的尾部：
 
-<a name="download-by-range"></a>
+    ```
+      http://my-bucket.qiniu.com/sunflower.jpg?e=1451491200&token=j6XaEDm5DwWvn0H9TTJs9MugjunHK8Cwo3luCglo:HbAKtTogKqDLWEkq7zVSX6T35NI=
+    ```
 
-## 断点续下载
+七牛云存储收到此请求后，会从URL中分离出 `token` ，对其余部分执行签名算法，以验证URL的合法性。同时，七牛云存储还将验证URL是否过期。
 
-断点续下载协议标准参考：<http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35>
+**流程**
 
-七牛云存储按以上标准支持断点续下载，只需在 HTTP 请求下载链接的头部附带 `Range` 字段即可。
+![私有资源下载](img/private-download.png)
 
-    Range: bytes=<first-byte-pos>-<last-byte-pos>
+1. 应用客户端向应用服务器请求私有资源的下载授权；
+1. 应用服务器根据应用客户端的请求，构造出资源URL，并且设定过期时间；
+1. 应用服务器使用下载凭证签名算法，对URL签名；
+1. 应用服务器将完整的下载URL反馈给应用客户端；
+1. 应用客户端向七牛云存储发送下载请求；
+1. 七牛云存储向应用客户端返回资源数据，或者错误信息。
 
-**参数**
-
-名称               | 说明
--------------------|-------------------------------------
-`<first-byte-pos>` | 起始位置，从数字0开始计算
-`<last-byte-pos>`  | 断点续下载中，最后一个字节所在的位置
 
 
 <a name="define-404-not-found"></a>

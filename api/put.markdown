@@ -3,34 +3,6 @@ layout: default
 title: "上传方式"
 ---
 
-- [上传流程](#workflow)
-    - [Local - 本地上传](#local-upload) 
-    - [UGC - 终端用户加速直传](#ugc-upload) 
-      - [上传模式1——普通上传](#upload-without-callback)
-      - [上传模式2——高级上传（带回调）](#upload-with-callback)
-- [上传文件](#upload)
-    - [接口 - API](#upload-api)
-    - [凭证 - uploadToken](#uploadToken)
-        - [算法](#uploadToken-algorithm)
-        - [参数](#uploadToken-args)
-        - [使用上传模型1，App-Client 接收来自 Qiniu-Cloud-Storage 的 Response Body](#uploadToken-returnBody)
-        - [使用上传模型2，App-Client 接收来自 App-Server 的 Response Body](#upload-with-callback-appserver)
-        - [音视频上传预转 - asyncOps](#uploadToken-asyncOps)
-        - [样例代码](#uploadToken-examples)
-- [附录](#dictionary)
-    - [魔法变量 - MagicVariables](#MagicVariables)
-    - [自定义变量 - xVariables](#xVariables)
-    - [错误码](#error-code)
-
-
-- [资源上传基础](#upload-basic)
-    - [Html Form Post](#html-form-post)
-    - [Multipart](#multipart)
-- [参数介绍](#parameters)
-	- [UploadToken](#uploadtoken)
-- [七牛的响应](#response)
-	- [普通上传](#ordinary-upload)
-	- [高级上传（带回调）](#advanced-upload)
 
 
 <a name="upload-basic"></a>
@@ -56,7 +28,7 @@ title: "上传方式"
 
 七牛云存储的资源上传使用[HTML Form POST](http://www.w3.org/TR/html4/interact/forms.html)，采用[multipart/form-data](http://www.w3.org/TR/html4/interact/forms.html#h-17.13.4.2)数据格式。
 
-实际操作中，有两种方式。一种是在Web页面中上传文件，另一种是在非HTML页面客户端上传。
+实际操作中，有两种方式。一种是在HTML页面中上传文件，另一种是在非HTML页面客户端上传。
 
 <a name="html-form-post"></a>
 
@@ -85,7 +57,7 @@ title: "上传方式"
 如果上传客户端不是HTML页面，那么用户就需要模仿浏览器，将参数组织成 `multipart/form-data` 格式。该格式的大体形态如下：
 
 ```
-POST http://up.qbox.me/
+POST http://up.qiniu.com/
 Content-Type: multipart/form-data; boundary=<Boundary>
 <Boundary>
 
@@ -107,9 +79,10 @@ Content-Disposition: form-data; name="file"; filename="<FileName>"
 Content-Type: <MimeType>
 
 <FileContent>
+
 ```
 
-用户可以手工地构造出 `multipart/form-data` 数据。但更好地方式是使用七牛云存储提供的多种[SDK]()，简单快速地完成上传操作。此外，也有很多HTTP客户端组件、库和工具可以帮助用户快速构造 `multipart/form-data` 数据，在用户需要直接访问七牛云存储API的时候使用。
+用户可以手工地构造出 `multipart/form-data` 数据。但更好的方式是使用七牛云存储提供的多种[SDK]()，简单快速地完成上传操作。此外，也有很多HTTP客户端组件、库和工具可以帮助用户快速构造 `multipart/form-data` 数据，在用户需要直接访问七牛云存储API的时候使用。
 
 <a name="parameters"></a>
 
@@ -131,7 +104,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
 
 上传策略是资源上传时的一组配置设定。通过这组配置信息，七牛云存储可以了解用户上传的需求：它将上传什么资源，上传到哪个空间，是否需要回调，还是使用重定向，是否需要设置反馈信息的内容，以及请求的失效时间等等。
 
-上传策略同时还参与请求验证。实际上，[上传凭证（Upload Token）](#upload-token)就是上传策略的加密结果。通过对PutPolicy的非可逆加密，可以确保用户对某个资源的上传请求是完全受到验证的。
+上传策略同时还参与请求验证。实际上，[上传凭证（Upload Token）](#upload-token)就是上传策略的加密结果。通过对PutPolicy的加密，可以确保用户对某个资源的上传请求是完全受到验证的。
 
 上传策略的具体构成如下：
 
@@ -152,7 +125,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
 
  字段名       | 必须 | 说明
 --------------|------|-----------------------------------------------------------------------
- scope        | 是   | 用于指定文件所上传的目标Bucket和Key。格式为：<bucket name>[:<key>]。若只指定Bucket名，表示文件上传至该Bucket。若同时指定了Bucket和Key（<bucket name>:<key>），表示上传文件限制在指定的Key上。两种形式的差别在于，前者是“新增”操作：如果所上传文件的Key在Bucket中已存在，上传操作将失败。而后者则是“新增或覆盖”操作：如果Key在Bucket中已经存在，将会被覆盖；如不存在，则将文件新增至Bucket中。
+ scope        | 是   | 用于指定文件所上传的目标Bucket和Key。格式为：\<bucket name\>\[:\<key\>\]。若只指定Bucket名，表示文件上传至该Bucket。若同时指定了Bucket和Key（\<bucket name\>:\<key\>），表示上传文件限制在指定的Key上。两种形式的差别在于，前者是“新增”操作：如果所上传文件的Key在Bucket中已存在，上传操作将失败。而后者则是“新增或覆盖”操作：如果Key在Bucket中已经存在，将会被覆盖；如不存在，则将文件新增至Bucket中。
  deadline     | 是   | 定义上传请求的失效时间，[Unix时间戳](http://en.wikipedia.org/wiki/Unix_time)，单位为秒。
  endUser      | 否   | 给上传的文件添加唯一属主标识，特殊场景下非常有用，比如根据App-Client标识给图片或视频打水印
  returnUrl    | 否   | 设置用于浏览器端文件上传成功后，浏览器执行301跳转的URL，一般为`HTML Form`上传时使用。文件上传成功后会跳转到`returnUrl?query_string`, `query_string`会包含 `returnBody` 内容。
