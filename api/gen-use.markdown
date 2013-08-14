@@ -309,7 +309,7 @@ Client。
 ```
   http://example.qiniudn.com/HelloQiniu.txt
 ```
-对私有资源的访问，需要对地址进行签名，具体参考 [API 文件下载-私有资源下载](/api/get.html#private-download)
+对私有资源的访问，需要对地址进行签名。具体参考 [API 文件下载-私有资源下载](/api/get.html#private-download)
 
 说明：七牛服务端是key-value系统，而非树型结构。因此没有文件夹的概念，但key允许包含 `/` ，使得从形式上像目录结构，比如 “a/b/c/d.txt” 这个 key，在服务端只对应一个文件，但它看起来像 a 目录下的 b 目录下的 c 目录下的文件 d.txt。实际上，服务端是不存在 a、b、c 三个目录的，也没法创建目录。用户可以将bucket理解为文件夹，但是这个文件夹下面只有文件，没有子文件夹。
 
