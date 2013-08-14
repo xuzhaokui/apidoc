@@ -4,6 +4,29 @@ title: "上传方式"
 ---
 
 
+- [资源上传基础](#upload-basic)
+  - [上传协议](#upload-proto)
+  - [在HTML页面中上传资源](#html-form-post)
+  - [非HTML客户端上传](#multipart)
+  - [上传参数](#parameters)
+  - [上传策略（PutPolicy）](#上传策略（PutPolicy）)
+  - [上传凭证（Upload Token）](#put-policy)
+  - [上传请求的反馈](#response)
+    - [基本反馈](#basic-resp)
+    - [Return Body](#return-body)
+    - [Callback Body](#callback-body)
+    - [重定向的反馈](#redirect-response)
+  - [魔法变量（MagicVariables）](#MagicVariables)
+  - [自定义变量（xVariables）](#xVariables)
+- [上传资源](#do-upload)
+  - [本地上传](#local-upload)
+  - [普通客户端直传](#direct-upload)
+  - [重定向上传](#redirect-upload)
+  - [回调上传](#callback-upload)
+  - [上传中的云处理（Async-Ops）](#uploadToken-asyncOps)
+
+
+
 
 <a name="upload-basic"></a>
 
@@ -526,7 +549,7 @@ exif 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogo
 
 回调上传也是在普通客户端直传上衍生出来的模型。相比普通客户端直传，回调上传增加了七牛云存储回调用户的回调服务器的步骤。
 
-![重定向上传](img/callback-upload.png)
+![回调向上传](img/callback-upload.png)
 
 上图展示了普通客户端直传的基本流程。具体步骤说明如下：
 
@@ -587,23 +610,3 @@ exif 接口返回的 JSON 数据可参考：<http://qiniuphotos.qiniudn.com/gogo
 
 具体的云处理访问详见[云处理参考]()
 
-
-<a name="appendix"></a>
-
-# 附录
-
-
-<a name="error-code"></a>
-
-## 错误码
-
-HTTP 状态码 | 错误说明
-------------|-----------------------------------------------------------------
-400         | 请求参数错误
-401         | 认证授权失败，可能是 AccessKey/SecretKey 错误或 UploadToken 无效
-405         | 请求方式错误，非预期的请求方式
-579         | 文件上传成功，但是回调（callback app-server）失败
-599         | 服务端操作失败
-614         | 文件已存在
-631         | 指定的存储空间（Bucket）不存在
-701         | 上传数据块校验出错
