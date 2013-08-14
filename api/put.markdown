@@ -184,7 +184,7 @@ x:\<custom_field_name\> | string | 否 | 自定义变量，必须以 `x:` 开头
     }'
     ```
 
-1. 将上传策略序列化成为json格式。用于可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
+1. 将上传策略序列化成为json格式。用户可以使用各种语言的json库，也可以手工地拼接字符串。序列化后，可以得到：
 
     ```
     put_policy = '{"scope":"my-bucket:sunflower.jpg","deadline":1451491200,"returnUrl":"{\"name\": $(fname),\"size\": $(fsize),\"w\": $(imageInfo.width),\"h\": $(imageInfo.height),\"hash\": $(etag),}"}'
